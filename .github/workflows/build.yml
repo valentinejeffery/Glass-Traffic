@@ -26,7 +26,7 @@ jobs:
             choco install nsis -y
             $env:Path += ";C:\Program Files (x86)\NSIS"
           }
-          makensis -DAPP_VERSION=0.2.0 -DBINARY_PATH=..\target\release\glasstrace.exe -DOUT_FILE=..\GlassTrace-Setup-0.2.0.exe installer\glasstrace.nsi
+          makensis "/DAPP_VERSION=0.2.0" "/DBINARY_PATH=..\target\release\glasstrace.exe" "/DOUT_FILE=..\GlassTrace-Setup-0.2.0.exe" installer\glasstrace.nsi
       - name: Upload NSIS installer artifact
         uses: actions/upload-artifact@v4
         with:
@@ -37,21 +37,3 @@ jobs:
         with:
           name: glasstrace-windows-x86_64
           path: target/release/glasstrace.exe
-
-  build-linux:
-    name: Linux (x86_64)
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@stable
-      - name: Install Linux GUI dependencies
-        run: sudo apt-get update && sudo apt-get install -y libx11-dev libxcb-shape0-dev libxcb-xfixes0-dev libxkbcommon-dev
-      - name: Run tests
-        run: cargo test
-      - name: Build release binary
-        run: cargo build --release
-      - name: Upload glasstrace Linux artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: glasstrace-linux-x86_64
-          path: target/release/glasstrace
