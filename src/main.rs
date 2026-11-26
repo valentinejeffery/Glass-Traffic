@@ -101,11 +101,17 @@ fn main() -> eframe::Result<()> {
         })
         .expect("failed to spawn collector thread");
 
+    let mut viewport = eframe::egui::ViewportBuilder::default()
+        .with_title("GlassTrace Desktop — Network Traffic & OSINT Geo-Telemetry")
+        .with_inner_size([1440.0, 880.0])
+        .with_min_inner_size([1024.0, 660.0]);
+
+    if let Ok(icon) = eframe::icon_data::from_png_bytes(include_bytes!("../assets/glasstrace_icon.png")) {
+        viewport = viewport.with_icon(Arc::new(icon));
+    }
+
     let native_options = eframe::NativeOptions {
-        viewport: eframe::egui::ViewportBuilder::default()
-            .with_title("GlassTrace Desktop — Network Traffic & OSINT Geo-Telemetry")
-            .with_inner_size([1440.0, 880.0])
-            .with_min_inner_size([1024.0, 660.0]),
+        viewport,
         ..Default::default()
     };
 

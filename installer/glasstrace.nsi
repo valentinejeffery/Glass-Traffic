@@ -33,6 +33,8 @@ RequestExecutionLevel admin
 SetCompressor /SOLID lzma
 
 ; Modern UI configuration
+!define MUI_ICON "..\assets\glasstrace.ico"
+!define MUI_UNICON "..\assets\glasstrace.ico"
 !define MUI_ABORTWARNING
 !define MUI_WELCOMEPAGE_TITLE "Welcome to ${APP_NAME} Setup"
 !define MUI_WELCOMEPAGE_TEXT "This wizard will install ${APP_NAME} ${APP_VERSION}, a native network traffic monitor and live OSINT geo-telemetry dashboard.$\r$\n$\r$\nTip: Run GlassTrace as Administrator to enable exact per-flow raw packet capture (SIO_RCVALL). Standard users can still monitor all active sockets, processes, and bandwidth."
