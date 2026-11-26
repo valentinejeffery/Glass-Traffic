@@ -1,0 +1,4 @@
+/target
+glasstrace_session_*.json
+glasstrace_flows_*.csv
+GlassTrace-Setup-*.exe
