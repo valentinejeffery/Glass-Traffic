@@ -4,7 +4,7 @@ pub mod world_map;
 
 use crate::osint::{detect_local_geoip, OsintEngine};
 use crate::state::TelemetryState;
-use crate::types::{format_bytes, format_rate, CaptureMode};
+use crate::types::{format_bytes, format_rate};
 use crate::ui::bandwidth_graph::draw_bandwidth_graph;
 use crate::ui::panels::{
     draw_apps_panel, draw_dir_arrow, draw_flows_table, draw_right_panel, DirectionFilter,
@@ -79,7 +79,6 @@ impl eframe::App for GlassTraceApp {
             (guard.snapshot(), guard.paused)
         };
 
-        let mut switch_mode_to: Option<CaptureMode> = None;
         let mut toggle_pause = false;
         let mut export_csv = false;
         let mut export_json = false;
@@ -111,23 +110,13 @@ impl eframe::App for GlassTraceApp {
                     );
                     ui.separator();
 
-                    // Live vs Sim toggle
-                    if ui
-                        .selectable_label(snap.mode == CaptureMode::Live, "LIVE CAPTURE")
-                        .on_hover_text("Monitors your real PC network traffic and active processes")
-                        .clicked()
-                        && snap.mode != CaptureMode::Live
-                    {
-                        switch_mode_to = Some(CaptureMode::Live);
-                    }
-                    if ui
-                        .selectable_label(snap.mode == CaptureMode::Sim, "GLOBAL SIM")
-                        .on_hover_text("Simulated global traffic & threats for demo/testing")
-                        .clicked()
-                        && snap.mode != CaptureMode::Sim
-                    {
-                        switch_mode_to = Some(CaptureMode::Sim);
-                    }
+                    // Live status indicator + Pause/Resume
+                    let (status_txt, status_col) = if is_paused {
+                        ("PAUSED", Color32::from_rgb(245, 158, 11))
+                    } else {
+                        ("LIVE", Color32::from_rgb(16, 185, 129))
+                    };
+                    ui.label(RichText::new(status_txt).strong().size(11.5).color(status_col));
 
                     if ui
                         .button(if is_paused { "Resume" } else { "Pause" })
@@ -479,13 +468,6 @@ impl eframe::App for GlassTraceApp {
                 guard.set_home_origin(lat, lon, label.clone());
             }
             self.show_toast(format!("PC Origin set to {}", label));
-        }
-        if let Some(new_mode) = switch_mode_to {
-            if let Ok(mut guard) = self.state.write() {
-                guard.reset_for_mode_switch(new_mode);
-            }
-            self.selected_app = None;
-            self.selected_ip = None;
         }
         if toggle_pause {
             if let Ok(mut guard) = self.state.write() {

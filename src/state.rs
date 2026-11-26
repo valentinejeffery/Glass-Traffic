@@ -1,6 +1,5 @@
 use crate::types::{
-    AlertEvent, AlertKind, AppSummary, BandwidthPoint, CaptureBackendStatus, CaptureMode,
-    Direction, Flow,
+    AlertEvent, AlertKind, AppSummary, BandwidthPoint, CaptureBackendStatus, Direction, Flow,
 };
 use chrono::Local;
 use serde::Serialize;
@@ -13,7 +12,6 @@ const MAX_ALERTS: usize = 250;
 
 #[derive(Debug, Clone, Serialize)]
 pub struct TelemetrySnapshot {
-    pub mode: CaptureMode,
     pub backend: CaptureBackendStatus,
     pub home_lat: f32,
     pub home_lon: f32,
@@ -35,7 +33,6 @@ pub struct TelemetrySnapshot {
 }
 
 pub struct TelemetryState {
-    pub mode: CaptureMode,
     pub paused: bool,
     pub backend: CaptureBackendStatus,
     pub home_lat: f32,
@@ -59,7 +56,7 @@ pub struct TelemetryState {
 }
 
 impl TelemetryState {
-    pub fn new(initial_mode: CaptureMode) -> Self {
+    pub fn new() -> Self {
         let mut history = VecDeque::with_capacity(HISTORY_LEN);
         let now = chrono::Utc::now().timestamp();
         for i in (0..HISTORY_LEN).rev() {
@@ -75,7 +72,6 @@ impl TelemetryState {
         }
 
         Self {
-            mode: initial_mode,
             paused: false,
             backend: CaptureBackendStatus::default(),
             // Default home anchor (auto-detected on startup if online, or customizable by user)
@@ -104,17 +100,6 @@ impl TelemetryState {
         self.home_lat = lat.clamp(-85.0, 85.0);
         self.home_lon = lon.clamp(-180.0, 180.0);
         self.home_label = label;
-    }
-
-    pub fn reset_for_mode_switch(&mut self, new_mode: CaptureMode) {
-        self.mode = new_mode;
-        self.flows.clear();
-        self.apps.clear();
-        self.seen_hosts.clear();
-        self.seen_countries.clear();
-        self.seen_inbound_ips.clear();
-        self.alerted_high_risk.clear();
-        self.alerted_proxy.clear();
     }
 
     pub fn clear_alerts(&mut self) {
@@ -330,7 +315,6 @@ impl TelemetryState {
             .count();
 
         TelemetrySnapshot {
-            mode: self.mode,
             backend: self.backend.clone(),
             home_lat: self.home_lat,
             home_lon: self.home_lon,

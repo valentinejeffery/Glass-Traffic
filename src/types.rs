@@ -39,12 +39,6 @@ impl Direction {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
-pub enum CaptureMode {
-    Live,
-    Sim,
-}
-
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct CaptureBackendStatus {
     pub raw_capture_active: bool,

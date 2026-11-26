@@ -21,7 +21,6 @@ No browser, no WebView, no Electron, and no external packet-capture drivers (Npc
   - **Linux**:
     - **Elevated (`sudo` / `CAP_NET_RAW`)**: `AF_PACKET` raw Ethernet/IPv4/IPv6 capture for exact per-flow RX/TX accounting.
     - **Non-Root Fallback**: `/proc/net/{tcp,tcp6,udp,udp6,dev}` + `/proc/<pid>/{fd,comm,exe}`.
-  - **Global Simulator Mode**: Built-in global traffic & threat dataset (`--mode sim` or toggle in the top bar) for offline demos and testing.
 
 - **Live OSINT Enrichment**
   - Async background enrichment via `ip-api.com` (GeoIP, ASN, ISP, Org, rDNS, proxy/VPN/hosting detection).
@@ -49,7 +48,6 @@ No browser, no WebView, no Electron, and no external packet-capture drivers (Npc
 glasstrace [OPTIONS]
 
 Options:
-  --mode <live|sim>             Initial capture mode [default: live]
   --offline                     Use offline GeoIP fallback instead of live HTTP lookups
   --abuseipdb-key <KEY>         AbuseIPDB v2 API key (or env ABUSEIPDB_API_KEY)
   --vt-key <KEY>                VirusTotal v3 API key (or env VT_API_KEY)
@@ -65,5 +63,4 @@ Options:
 - `src/capture/linux.rs` — Native Linux `AF_PACKET` raw capture + `/proc/net` IPv4/IPv6 socket & process attribution.
 - `src/osint.rs` — Thread-safe OSINT cache, `ip-api.com`, AbuseIPDB v2, VirusTotal v3, risk scoring, and offline fallback.
 - `src/state.rs` — Thread-safe 120s ring buffer, per-app aggregation, OSINT alert generator, and JSON/CSV export.
-- `src/simulator.rs` — Realistic global traffic & threat simulation dataset.
 - `src/ui/` — Native GPU-rendered `egui` desktop UI (`world_map.rs`, `bandwidth_graph.rs`, `panels.rs`, `mod.rs`).

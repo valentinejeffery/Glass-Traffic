@@ -109,13 +109,6 @@ impl OsintEngine {
         });
     }
 
-    /// Insert a pre-populated OSINT entry (used by Global Simulator mode).
-    pub fn seed(&self, info: OsintInfo) {
-        if let Ok(mut guard) = self.cache.write() {
-            guard.insert(info.ip.clone(), info);
-        }
-    }
-
     pub fn cache_len(&self) -> usize {
         self.cache.read().map(|g| g.len()).unwrap_or(0)
     }
