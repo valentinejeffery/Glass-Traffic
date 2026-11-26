@@ -110,7 +110,7 @@ pub fn draw_bandwidth_graph(ui: &mut egui::Ui, history: &[BandwidthPoint]) {
     painter.text(
         Pos2::new(rect.right() - 10.0, rect.top() + 5.0),
         egui::Align2::RIGHT_TOP,
-        "120s Live Throughput  •  Cyan = Incoming (RX)  •  Violet = Outgoing (TX)",
+        "120s Live Throughput  |  Cyan = Incoming (RX)  |  Violet = Outgoing (TX)",
         egui::FontId::proportional(10.5),
         Color32::from_rgb(148, 163, 184),
     );

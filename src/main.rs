@@ -95,6 +95,18 @@ fn main() -> eframe::Result<()> {
         return Ok(());
     }
 
+    // Auto-detect PC origin on startup if online (non-blocking)
+    if !args.offline {
+        let state_geo = Arc::clone(&state);
+        thread::spawn(move || {
+            if let Some((lat, lon, label)) = crate::osint::detect_local_geoip() {
+                if let Ok(mut guard) = state_geo.write() {
+                    guard.set_home_origin(lat, lon, label);
+                }
+            }
+        });
+    }
+
     // Spawn 1-second background telemetry collector thread
     let state_bg = Arc::clone(&state);
     let osint_bg = Arc::clone(&osint);

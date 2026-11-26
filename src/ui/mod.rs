@@ -2,16 +2,18 @@ pub mod bandwidth_graph;
 pub mod panels;
 pub mod world_map;
 
-use crate::osint::OsintEngine;
+use crate::osint::{detect_local_geoip, OsintEngine};
 use crate::state::TelemetryState;
 use crate::types::{format_bytes, format_rate, CaptureMode};
 use crate::ui::bandwidth_graph::draw_bandwidth_graph;
 use crate::ui::panels::{
-    draw_apps_panel, draw_flows_table, draw_right_panel, DirectionFilter, ProtoFilter, RightTab,
+    draw_apps_panel, draw_dir_arrow, draw_flows_table, draw_right_panel, DirectionFilter,
+    ProtoFilter, RightTab,
 };
-use crate::ui::world_map::draw_world_map;
+use crate::ui::world_map::{draw_world_map, MapViewState, ORIGIN_PRESETS};
 use eframe::egui::{self, Color32, RichText, Stroke};
 use std::sync::{Arc, RwLock};
+use std::thread;
 use std::time::{Duration, Instant};
 
 pub struct GlassTraceApp {
@@ -24,6 +26,11 @@ pub struct GlassTraceApp {
     proto_filter: ProtoFilter,
     search: String,
     right_tab: RightTab,
+    map_view: MapViewState,
+    show_origin_window: bool,
+    custom_origin_label: String,
+    custom_origin_lat: String,
+    custom_origin_lon: String,
     toast_msg: Option<(String, Instant)>,
 }
 
@@ -34,6 +41,10 @@ impl GlassTraceApp {
         osint: Arc<OsintEngine>,
     ) -> Self {
         apply_glass_theme(&cc.egui_ctx);
+        let (lat, lon, label) = state
+            .read()
+            .map(|g| (g.home_lat, g.home_lon, g.home_label.clone()))
+            .unwrap_or((39.8, -98.5, "Default Origin (US)".to_string()));
         Self {
             state,
             osint,
@@ -44,6 +55,11 @@ impl GlassTraceApp {
             proto_filter: ProtoFilter::All,
             search: String::new(),
             right_tab: RightTab::Alerts,
+            map_view: MapViewState::default(),
+            show_origin_window: false,
+            custom_origin_label: label,
+            custom_origin_lat: format!("{:.4}", lat),
+            custom_origin_lon: format!("{:.4}", lon),
             toast_msg: None,
         }
     }
@@ -68,6 +84,7 @@ impl eframe::App for GlassTraceApp {
         let mut export_csv = false;
         let mut export_json = false;
         let mut clear_alerts = false;
+        let mut new_origin_update: Option<(f32, f32, String)> = None;
 
         // Top Command & KPI Bar
         egui::TopBottomPanel::top("top_bar")
@@ -81,7 +98,7 @@ impl eframe::App for GlassTraceApp {
                 ui.horizontal_wrapped(|ui| {
                     // Brand
                     ui.label(
-                        RichText::new("◈ GLASSTRACE")
+                        RichText::new("GLASSTRACE")
                             .strong()
                             .size(16.0)
                             .color(Color32::from_rgb(34, 211, 238)),
@@ -96,14 +113,16 @@ impl eframe::App for GlassTraceApp {
 
                     // Live vs Sim toggle
                     if ui
-                        .selectable_label(snap.mode == CaptureMode::Live, "● LIVE CAPTURE")
+                        .selectable_label(snap.mode == CaptureMode::Live, "LIVE CAPTURE")
+                        .on_hover_text("Monitors your real PC network traffic and active processes")
                         .clicked()
                         && snap.mode != CaptureMode::Live
                     {
                         switch_mode_to = Some(CaptureMode::Live);
                     }
                     if ui
-                        .selectable_label(snap.mode == CaptureMode::Sim, "◎ GLOBAL SIM")
+                        .selectable_label(snap.mode == CaptureMode::Sim, "GLOBAL SIM")
+                        .on_hover_text("Simulated global traffic & threats for demo/testing")
                         .clicked()
                         && snap.mode != CaptureMode::Sim
                     {
@@ -111,7 +130,7 @@ impl eframe::App for GlassTraceApp {
                     }
 
                     if ui
-                        .button(if is_paused { "▶ Resume" } else { "⏸ Pause" })
+                        .button(if is_paused { "Resume" } else { "Pause" })
                         .clicked()
                     {
                         toggle_pause = true;
@@ -119,29 +138,56 @@ impl eframe::App for GlassTraceApp {
 
                     ui.separator();
 
-                    // KPI pills
-                    kpi_pill(
+                    // KPI pills with crisp vector arrows
+                    kpi_arrow_pill(
                         ui,
-                        "IN (RX)",
+                        "IN",
+                        false,
                         &format_rate(snap.current_rx_bps),
                         Color32::from_rgb(34, 211, 238),
                     );
-                    kpi_pill(
+                    kpi_arrow_pill(
                         ui,
-                        "OUT (TX)",
+                        "OUT",
+                        true,
                         &format_rate(snap.current_tx_bps),
                         Color32::from_rgb(168, 85, 247),
                     );
-                    kpi_pill(
-                        ui,
-                        "SESSION",
-                        &format!(
-                            "↓{} ↑{}",
-                            format_bytes(snap.session_rx_bytes),
-                            format_bytes(snap.session_tx_bytes)
-                        ),
-                        Color32::from_rgb(203, 213, 225),
-                    );
+
+                    // Session total pill with vector arrows
+                    egui::Frame::none()
+                        .fill(Color32::from_rgb(15, 23, 38))
+                        .stroke(Stroke::new(1.0_f32, Color32::from_rgb(30, 41, 59)))
+                        .rounding(5.0)
+                        .inner_margin(egui::Margin::symmetric(8.0, 3.0))
+                        .show(ui, |ui| {
+                            ui.horizontal(|ui| {
+                                ui.spacing_mut().item_spacing.x = 3.0;
+                                ui.label(
+                                    RichText::new("SESSION")
+                                        .size(10.0)
+                                        .color(Color32::from_rgb(100, 116, 139)),
+                                );
+                                draw_dir_arrow(ui, false, Color32::from_rgb(34, 211, 238));
+                                ui.label(
+                                    RichText::new(format_bytes(snap.session_rx_bytes))
+                                        .strong()
+                                        .monospace()
+                                        .size(11.0)
+                                        .color(Color32::from_rgb(34, 211, 238)),
+                                );
+                                ui.add_space(4.0);
+                                draw_dir_arrow(ui, true, Color32::from_rgb(168, 85, 247));
+                                ui.label(
+                                    RichText::new(format_bytes(snap.session_tx_bytes))
+                                        .strong()
+                                        .monospace()
+                                        .size(11.0)
+                                        .color(Color32::from_rgb(168, 85, 247)),
+                                );
+                            });
+                        });
+
                     kpi_pill(
                         ui,
                         "FLOWS",
@@ -165,10 +211,20 @@ impl eframe::App for GlassTraceApp {
                         if ui.button("Export CSV").clicked() {
                             export_csv = true;
                         }
+                        if ui
+                            .button(format!("PC Origin: {}", snap.home_label))
+                            .on_hover_text("Change your PC's origin location on the world map")
+                            .clicked()
+                        {
+                            self.show_origin_window = !self.show_origin_window;
+                            self.custom_origin_label = snap.home_label.clone();
+                            self.custom_origin_lat = format!("{:.4}", snap.home_lat);
+                            self.custom_origin_lon = format!("{:.4}", snap.home_lon);
+                        }
                     });
                 });
 
-                // Second compact status line: capture backend privilege badge + interfaces + toast
+                // Second compact status line: capture backend badge + interfaces + map reset + toast
                 ui.add_space(4.0);
                 ui.horizontal(|ui| {
                     let badge_col = if snap.backend.raw_capture_active {
@@ -177,7 +233,7 @@ impl eframe::App for GlassTraceApp {
                         Color32::from_rgb(245, 158, 11)
                     };
                     ui.label(
-                        RichText::new(format!("● {}", snap.backend.backend_name))
+                        RichText::new(format!("[* ] {}", snap.backend.backend_name))
                             .strong()
                             .size(11.0)
                             .color(badge_col),
@@ -185,7 +241,7 @@ impl eframe::App for GlassTraceApp {
                     .on_hover_text(&snap.backend.elevation_note);
 
                     ui.label(
-                        RichText::new(format!("— {}", snap.backend.elevation_note))
+                        RichText::new(format!("- {}", snap.backend.elevation_note))
                             .size(10.5)
                             .color(Color32::from_rgb(148, 163, 184)),
                     );
@@ -231,11 +287,112 @@ impl eframe::App for GlassTraceApp {
                 });
             });
 
+        // Floating PC Origin Selector Window
+        if self.show_origin_window {
+            let mut open = self.show_origin_window;
+            egui::Window::new("Set PC Origin Location")
+                .open(&mut open)
+                .collapsible(false)
+                .resizable(false)
+                .default_width(360.0)
+                .show(ctx, |ui| {
+                    ui.label(
+                        RichText::new("Choose where your PC is anchored on the world map:")
+                            .size(11.5)
+                            .color(Color32::from_rgb(203, 213, 225)),
+                    );
+                    ui.add_space(6.0);
+
+                    ui.horizontal(|ui| {
+                        if ui.button("Auto-Detect My PC (GeoIP)").clicked() {
+                            let state_clone = Arc::clone(&self.state);
+                            thread::spawn(move || {
+                                if let Some((lat, lon, label)) = detect_local_geoip() {
+                                    if let Ok(mut g) = state_clone.write() {
+                                        g.set_home_origin(lat, lon, label);
+                                    }
+                                }
+                            });
+                            self.show_toast("Detecting PC location via GeoIP...".to_string());
+                        }
+                        if ui.button("Pick Directly on Map").clicked() {
+                            self.map_view.picking_origin = true;
+                            self.show_origin_window = false;
+                        }
+                    });
+
+                    ui.separator();
+                    ui.label(
+                        RichText::new("Quick City Presets")
+                            .strong()
+                            .size(11.0)
+                            .color(Color32::from_rgb(148, 163, 184)),
+                    );
+                    ui.horizontal_wrapped(|ui| {
+                        for &(name, lat, lon) in ORIGIN_PRESETS {
+                            if ui.small_button(name).clicked() {
+                                new_origin_update = Some((lat, lon, name.to_string()));
+                                self.custom_origin_label = name.to_string();
+                                self.custom_origin_lat = format!("{:.4}", lat);
+                                self.custom_origin_lon = format!("{:.4}", lon);
+                            }
+                        }
+                    });
+
+                    ui.separator();
+                    ui.label(
+                        RichText::new("Custom Coordinates")
+                            .strong()
+                            .size(11.0)
+                            .color(Color32::from_rgb(148, 163, 184)),
+                    );
+                    egui::Grid::new("origin_custom_grid")
+                        .num_columns(2)
+                        .spacing([8.0, 4.0])
+                        .show(ui, |ui| {
+                            ui.label("Label:");
+                            ui.text_edit_singleline(&mut self.custom_origin_label);
+                            ui.end_row();
+                            ui.label("Latitude (-60..84):");
+                            ui.text_edit_singleline(&mut self.custom_origin_lat);
+                            ui.end_row();
+                            ui.label("Longitude (-180..180):");
+                            ui.text_edit_singleline(&mut self.custom_origin_lon);
+                            ui.end_row();
+                        });
+
+                    ui.add_space(6.0);
+                    ui.horizontal(|ui| {
+                        if ui.button("Apply Custom Origin").clicked() {
+                            if let (Ok(lat), Ok(lon)) = (
+                                self.custom_origin_lat.trim().parse::<f32>(),
+                                self.custom_origin_lon.trim().parse::<f32>(),
+                            ) {
+                                let lbl = if self.custom_origin_label.trim().is_empty() {
+                                    format!("{:.2}, {:.2}", lat, lon)
+                                } else {
+                                    self.custom_origin_label.trim().to_string()
+                                };
+                                new_origin_update = Some((lat, lon, lbl));
+                            } else {
+                                self.show_toast("Invalid latitude or longitude number".to_string());
+                            }
+                        }
+                        if ui.button("Reset Map Zoom").clicked() {
+                            self.map_view.reset();
+                        }
+                    });
+                });
+            if !open {
+                self.show_origin_window = false;
+            }
+        }
+
         // Left Sidebar: Per-Application Breakdown
         egui::SidePanel::left("apps_panel")
             .resizable(true)
-            .default_width(235.0)
-            .min_width(180.0)
+            .default_width(240.0)
+            .min_width(185.0)
             .frame(
                 egui::Frame::none()
                     .fill(Color32::from_rgb(11, 16, 26))
@@ -278,18 +435,23 @@ impl eframe::App for GlassTraceApp {
             )
             .show(ctx, |ui| {
                 let total_h = ui.available_height();
-                let map_h = (total_h * 0.38).clamp(210.0, 360.0);
+                let map_h = (total_h * 0.42).clamp(230.0, 390.0);
 
                 ui.allocate_ui(egui::Vec2::new(ui.available_width(), map_h), |ui| {
                     let prev_ip = self.selected_ip.clone();
-                    draw_world_map(
+                    if let Some((lat, lon)) = draw_world_map(
                         ui,
                         &snap.flows,
                         snap.home_lat,
                         snap.home_lon,
+                        &snap.home_label,
                         &mut self.selected_ip,
+                        &mut self.map_view,
                         self.start_time.elapsed().as_secs_f64(),
-                    );
+                    ) {
+                        let lbl = format!("Custom ({:.2}, {:.2})", lat, lon);
+                        new_origin_update = Some((lat, lon, lbl));
+                    }
                     if self.selected_ip != prev_ip && self.selected_ip.is_some() {
                         self.right_tab = RightTab::Inspector;
                     }
@@ -312,6 +474,12 @@ impl eframe::App for GlassTraceApp {
             });
 
         // Apply state mutations outside the read lock
+        if let Some((lat, lon, label)) = new_origin_update {
+            if let Ok(mut guard) = self.state.write() {
+                guard.set_home_origin(lat, lon, label.clone());
+            }
+            self.show_toast(format!("PC Origin set to {}", label));
+        }
         if let Some(new_mode) = switch_mode_to {
             if let Ok(mut guard) = self.state.write() {
                 guard.reset_for_mode_switch(new_mode);
@@ -356,6 +524,26 @@ fn kpi_pill(ui: &mut egui::Ui, label: &str, value: &str, color: Color32) {
         .inner_margin(egui::Margin::symmetric(8.0, 3.0))
         .show(ui, |ui| {
             ui.horizontal(|ui| {
+                ui.label(
+                    RichText::new(label)
+                        .size(10.0)
+                        .color(Color32::from_rgb(100, 116, 139)),
+                );
+                ui.label(RichText::new(value).strong().monospace().size(11.5).color(color));
+            });
+        });
+}
+
+fn kpi_arrow_pill(ui: &mut egui::Ui, label: &str, pointing_up: bool, value: &str, color: Color32) {
+    egui::Frame::none()
+        .fill(Color32::from_rgb(15, 23, 38))
+        .stroke(Stroke::new(1.0_f32, Color32::from_rgb(30, 41, 59)))
+        .rounding(5.0)
+        .inner_margin(egui::Margin::symmetric(8.0, 3.0))
+        .show(ui, |ui| {
+            ui.horizontal(|ui| {
+                ui.spacing_mut().item_spacing.x = 3.0;
+                draw_dir_arrow(ui, pointing_up, color);
                 ui.label(
                     RichText::new(label)
                         .size(10.0)

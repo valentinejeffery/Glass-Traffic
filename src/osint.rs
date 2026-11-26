@@ -224,6 +224,37 @@ fn fetch_ip_api(agent: &ureq::Agent, ip: &str) -> Option<OsintInfo> {
     })
 }
 
+/// Detect the local machine's public GeoIP coordinates (lat, lon, "City, CC") via ip-api.com.
+pub fn detect_local_geoip() -> Option<(f32, f32, String)> {
+    let agent = ureq::AgentBuilder::new()
+        .timeout_connect(Duration::from_secs(4))
+        .timeout_read(Duration::from_secs(5))
+        .build();
+    let resp = agent
+        .get("http://ip-api.com/json/?fields=status,countryCode,city,lat,lon")
+        .call()
+        .ok()?;
+    let json: serde_json::Value = resp.into_json().ok()?;
+    if json.get("status").and_then(|v| v.as_str()) != Some("success") {
+        return None;
+    }
+    let lat = json.get("lat")?.as_f64()? as f32;
+    let lon = json.get("lon")?.as_f64()? as f32;
+    let city = json.get("city").and_then(|v| v.as_str()).unwrap_or("");
+    let cc = json
+        .get("countryCode")
+        .and_then(|v| v.as_str())
+        .unwrap_or("");
+    let label = if !city.is_empty() && !cc.is_empty() {
+        format!("{}, {}", city, cc)
+    } else if !cc.is_empty() {
+        cc.to_string()
+    } else {
+        format!("{:.2}, {:.2}", lat, lon)
+    };
+    Some((lat, lon, label))
+}
+
 fn fetch_abuseipdb(agent: &ureq::Agent, ip: &str, api_key: &str) -> Option<u8> {
     let url = format!(
         "https://api.abuseipdb.com/api/v2/check?ipAddress={}&maxAgeInDays=90",

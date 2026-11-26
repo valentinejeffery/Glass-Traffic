@@ -46,6 +46,41 @@ pub fn direction_color(dir: Direction) -> Color32 {
     }
 }
 
+/// Draw a crisp vector arrow directly on the painter (no font glyph dependency).
+/// `pointing_up = true` for Outgoing (TX), `pointing_up = false` for Incoming (RX).
+pub fn draw_dir_arrow(ui: &mut egui::Ui, pointing_up: bool, color: Color32) {
+    let (rect, _) = ui.allocate_exact_size(egui::Vec2::new(9.0, 12.0), egui::Sense::hover());
+    let p = ui.painter();
+    let cx = rect.center().x;
+    let top = rect.top() + 1.5;
+    let bot = rect.bottom() - 1.5;
+    let stroke = Stroke::new(1.6_f32, color);
+
+    // Shaft
+    p.line_segment([egui::Pos2::new(cx, top), egui::Pos2::new(cx, bot)], stroke);
+
+    // Arrowhead
+    if pointing_up {
+        p.line_segment(
+            [egui::Pos2::new(cx, top), egui::Pos2::new(cx - 3.2, top + 3.5)],
+            stroke,
+        );
+        p.line_segment(
+            [egui::Pos2::new(cx, top), egui::Pos2::new(cx + 3.2, top + 3.5)],
+            stroke,
+        );
+    } else {
+        p.line_segment(
+            [egui::Pos2::new(cx, bot), egui::Pos2::new(cx - 3.2, bot - 3.5)],
+            stroke,
+        );
+        p.line_segment(
+            [egui::Pos2::new(cx, bot), egui::Pos2::new(cx + 3.2, bot - 3.5)],
+            stroke,
+        );
+    }
+}
+
 pub fn draw_apps_panel(
     ui: &mut egui::Ui,
     apps: &[AppSummary],
@@ -130,17 +165,24 @@ pub fn draw_apps_panel(
                         });
 
                         ui.horizontal(|ui| {
+                            ui.spacing_mut().item_spacing.x = 3.0;
+                            // Incoming (RX) — arrow pointing DOWN
+                            draw_dir_arrow(ui, false, Color32::from_rgb(34, 211, 238));
                             ui.label(
-                                RichText::new(format!("↓ {}", format_rate(app.rx_bps)))
+                                RichText::new(format_rate(app.rx_bps))
                                     .size(10.5)
                                     .color(Color32::from_rgb(34, 211, 238)),
                             );
+                            ui.add_space(6.0);
+                            // Outgoing (TX) — arrow pointing UP
+                            draw_dir_arrow(ui, true, Color32::from_rgb(168, 85, 247));
                             ui.label(
-                                RichText::new(format!("↑ {}", format_rate(app.tx_bps)))
+                                RichText::new(format_rate(app.tx_bps))
                                     .size(10.5)
                                     .color(Color32::from_rgb(168, 85, 247)),
                             );
                             if app.inbound_count > 0 {
+                                ui.add_space(4.0);
                                 ui.label(
                                     RichText::new(format!("IN:{}", app.inbound_count))
                                         .size(10.0)
@@ -539,7 +581,7 @@ pub fn draw_right_panel(
                                 .color(Color32::from_rgb(34, 211, 238)),
                         );
                         ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                            if ui.small_button("↻ Live Refresh").clicked() {
+                            if ui.small_button("Live Refresh").clicked() {
                                 osint.refresh(&ip);
                             }
                         });
@@ -653,7 +695,7 @@ pub fn draw_right_panel(
                                     );
                                     ui.label(
                                         RichText::new(format!(
-                                            "{} :{} → :{}",
+                                            "{} :{} -> :{}",
                                             f.protocol.as_str(),
                                             f.local_port,
                                             f.remote_port
@@ -664,7 +706,7 @@ pub fn draw_right_panel(
                                 });
                                 ui.label(
                                     RichText::new(format!(
-                                        "{} (PID {}) • {}",
+                                        "{} (PID {}) | {}",
                                         f.process_name, f.pid, f.state
                                     ))
                                     .size(11.0)
@@ -677,16 +719,31 @@ pub fn draw_right_panel(
                                             .color(Color32::from_rgb(100, 116, 139)),
                                     );
                                 }
-                                ui.label(
-                                    RichText::new(format!(
-                                        "Total ↓ {}  |  ↑ {}  {}",
-                                        format_bytes(f.total_rx),
-                                        format_bytes(f.total_tx),
-                                        if f.exact_accounting { "(exact)" } else { "(est)" }
-                                    ))
-                                    .size(10.5)
-                                    .color(Color32::from_rgb(148, 163, 184)),
-                                );
+                                ui.horizontal(|ui| {
+                                    ui.spacing_mut().item_spacing.x = 3.0;
+                                    ui.label(
+                                        RichText::new("Total")
+                                            .size(10.5)
+                                            .color(Color32::from_rgb(148, 163, 184)),
+                                    );
+                                    draw_dir_arrow(ui, false, Color32::from_rgb(34, 211, 238));
+                                    ui.label(
+                                        RichText::new(format_bytes(f.total_rx))
+                                            .size(10.5)
+                                            .color(Color32::from_rgb(34, 211, 238)),
+                                    );
+                                    ui.add_space(4.0);
+                                    draw_dir_arrow(ui, true, Color32::from_rgb(168, 85, 247));
+                                    ui.label(
+                                        RichText::new(format!(
+                                            "{} {}",
+                                            format_bytes(f.total_tx),
+                                            if f.exact_accounting { "(exact)" } else { "(est)" }
+                                        ))
+                                        .size(10.5)
+                                        .color(Color32::from_rgb(168, 85, 247)),
+                                    );
+                                });
                             });
                         ui.add_space(4.0);
                     }

@@ -17,6 +17,7 @@ pub struct TelemetrySnapshot {
     pub backend: CaptureBackendStatus,
     pub home_lat: f32,
     pub home_lon: f32,
+    pub home_label: String,
     pub current_rx_bps: u64,
     pub current_tx_bps: u64,
     pub peak_rx_bps: u64,
@@ -39,6 +40,7 @@ pub struct TelemetryState {
     pub backend: CaptureBackendStatus,
     pub home_lat: f32,
     pub home_lon: f32,
+    pub home_label: String,
     pub current_rx_bps: u64,
     pub current_tx_bps: u64,
     pub peak_rx_bps: u64,
@@ -76,9 +78,10 @@ impl TelemetryState {
             mode: initial_mode,
             paused: false,
             backend: CaptureBackendStatus::default(),
-            // Default home anchor (central US; updates if user prefers or via GeoIP)
+            // Default home anchor (auto-detected on startup if online, or customizable by user)
             home_lat: 39.8,
             home_lon: -98.5,
+            home_label: "Default Origin (US)".to_string(),
             current_rx_bps: 0,
             current_tx_bps: 0,
             peak_rx_bps: 0,
@@ -95,6 +98,12 @@ impl TelemetryState {
             alerted_high_risk: HashSet::new(),
             alerted_proxy: HashSet::new(),
         }
+    }
+
+    pub fn set_home_origin(&mut self, lat: f32, lon: f32, label: String) {
+        self.home_lat = lat.clamp(-85.0, 85.0);
+        self.home_lon = lon.clamp(-180.0, 180.0);
+        self.home_label = label;
     }
 
     pub fn reset_for_mode_switch(&mut self, new_mode: CaptureMode) {
@@ -325,6 +334,7 @@ impl TelemetryState {
             backend: self.backend.clone(),
             home_lat: self.home_lat,
             home_lon: self.home_lon,
+            home_label: self.home_label.clone(),
             current_rx_bps: self.current_rx_bps,
             current_tx_bps: self.current_tx_bps,
             peak_rx_bps: self.peak_rx_bps,
