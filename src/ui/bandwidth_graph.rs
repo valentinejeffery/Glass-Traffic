@@ -8,9 +8,13 @@ pub fn draw_bandwidth_graph(ui: &mut egui::Ui, history: &[BandwidthPoint]) {
         ui.allocate_exact_size(Vec2::new(available.x, height), egui::Sense::hover());
     let painter = ui.painter_at(rect);
 
-    // Card background
-    painter.rect_filled(rect, 6.0, Color32::from_rgb(12, 18, 30));
-    painter.rect_stroke(rect, 6.0, Stroke::new(1.0_f32, Color32::from_rgb(30, 41, 59)));
+    // Card background adapts to active theme (Charcoal Black / Obsidian Navy)
+    painter.rect_filled(rect, 6.0_f32, ui.visuals().faint_bg_color);
+    painter.rect_stroke(
+        rect,
+        6.0_f32,
+        Stroke::new(1.0_f32, ui.visuals().widgets.noninteractive.bg_stroke.color),
+    );
 
     if history.len() < 2 {
         return;

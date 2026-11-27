@@ -199,6 +199,10 @@ impl StatsStore {
         if let Ok(content) = fs::read_to_string(&path) {
             if let Ok(mut parsed) = serde_json::from_str::<StatsStore>(&content) {
                 parsed.ticks_since_save = 0;
+                // Purge any legacy non-country entries (Private LAN, Listening Socket, etc.)
+                parsed
+                    .by_location
+                    .retain(|_, v| is_real_country(&v.country, &v.country_code));
                 return parsed;
             }
         }
@@ -273,29 +277,26 @@ impl StatsStore {
             comp_entry.samples = comp_entry.samples.saturating_add(1);
             comp_entry.max_risk = comp_entry.max_risk.max(f.osint.risk_score);
 
-            // Location / Country
-            let country = if f.osint.country.is_empty() {
-                "Unknown".to_string()
-            } else {
-                f.osint.country.clone()
-            };
-            let cc = if f.osint.country_code.is_empty() {
-                "--".to_string()
-            } else {
-                f.osint.country_code.clone()
-            };
-            let loc_entry = self
-                .by_location
-                .entry(country.clone())
-                .or_insert_with(|| LocationStat {
-                    country,
-                    country_code: cc,
-                    ..Default::default()
-                });
-            loc_entry.rx_bytes = loc_entry.rx_bytes.saturating_add(f.rx_bps);
-            loc_entry.tx_bytes = loc_entry.tx_bytes.saturating_add(f.tx_bps);
-            loc_entry.samples = loc_entry.samples.saturating_add(1);
-            loc_entry.max_risk = loc_entry.max_risk.max(f.osint.risk_score);
+            // Location / Country (exclude private LAN, loopback, listening sockets, and unresolved entries)
+            if !f.osint.is_private
+                && f.osint.source != "pending"
+                && is_real_country(&f.osint.country, &f.osint.country_code)
+            {
+                let country = f.osint.country.clone();
+                let cc = f.osint.country_code.clone();
+                let loc_entry = self
+                    .by_location
+                    .entry(country.clone())
+                    .or_insert_with(|| LocationStat {
+                        country,
+                        country_code: cc,
+                        ..Default::default()
+                    });
+                loc_entry.rx_bytes = loc_entry.rx_bytes.saturating_add(f.rx_bps);
+                loc_entry.tx_bytes = loc_entry.tx_bytes.saturating_add(f.tx_bps);
+                loc_entry.samples = loc_entry.samples.saturating_add(1);
+                loc_entry.max_risk = loc_entry.max_risk.max(f.osint.risk_score);
+            }
 
             // Application / Process
             let app_entry = self
@@ -370,7 +371,12 @@ impl StatsStore {
     }
 
     pub fn sorted_locations(&self) -> Vec<LocationStat> {
-        let mut v: Vec<LocationStat> = self.by_location.values().cloned().collect();
+        let mut v: Vec<LocationStat> = self
+            .by_location
+            .values()
+            .filter(|l| is_real_country(&l.country, &l.country_code))
+            .cloned()
+            .collect();
         v.sort_by(|a, b| (b.rx_bytes + b.tx_bytes).cmp(&(a.rx_bytes + a.tx_bytes)));
         v
     }
@@ -640,4 +646,30 @@ fn bars_to_csv(col_name: &str, bars: &[ChartBar]) -> String {
         ));
     }
     out
+}
+
+/// Returns true only for real geolocated countries (valid 2-letter ISO code, excluding LAN/local/listening sockets).
+pub fn is_real_country(country: &str, cc: &str) -> bool {
+    let cc = cc.trim();
+    if cc.len() != 2 || !cc.chars().all(|c| c.is_ascii_alphabetic()) {
+        return false;
+    }
+    let lower = country.trim().to_lowercase();
+    if lower.is_empty() {
+        return false;
+    }
+    const EXCLUDED: &[&str] = &[
+        "private",
+        "listening",
+        "loopback",
+        "unspecified",
+        "link-local",
+        "multicast",
+        "broadcast",
+        "cgnat",
+        "resolving",
+        "unknown",
+        "local",
+    ];
+    !EXCLUDED.iter().any(|k| lower.contains(k))
 }

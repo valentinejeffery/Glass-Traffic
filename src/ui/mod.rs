@@ -14,7 +14,7 @@ use crate::ui::panels::{
     ProtoFilter, RightTab,
 };
 use crate::ui::stats_view::{draw_stats_view, StatsUiState};
-use crate::ui::world_map::{draw_world_map, MapViewState, ORIGIN_PRESETS};
+use crate::ui::world_map::{draw_world_map, MapStyle, MapViewState, ORIGIN_PRESETS};
 use eframe::egui::{self, Color32, RichText, Stroke};
 use std::sync::{Arc, RwLock};
 use std::thread;
@@ -26,6 +26,42 @@ enum MainView {
     Statistics,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum AppTheme {
+    ObsidianNavy,
+    CharcoalBlack,
+}
+
+impl AppTheme {
+    fn label(&self) -> &'static str {
+        match self {
+            AppTheme::ObsidianNavy => "Obsidian",
+            AppTheme::CharcoalBlack => "Charcoal",
+        }
+    }
+
+    fn panel_bg(&self) -> Color32 {
+        match self {
+            AppTheme::ObsidianNavy => Color32::from_rgb(11, 16, 26),
+            AppTheme::CharcoalBlack => Color32::from_rgb(20, 20, 22),
+        }
+    }
+
+    fn central_bg(&self) -> Color32 {
+        match self {
+            AppTheme::ObsidianNavy => Color32::from_rgb(8, 12, 21),
+            AppTheme::CharcoalBlack => Color32::from_rgb(14, 14, 16),
+        }
+    }
+
+    fn border_col(&self) -> Color32 {
+        match self {
+            AppTheme::ObsidianNavy => Color32::from_rgb(30, 41, 59),
+            AppTheme::CharcoalBlack => Color32::from_rgb(44, 44, 50),
+        }
+    }
+}
+
 pub struct GlassTraceApp {
     state: Arc<RwLock<TelemetryState>>,
     osint: Arc<OsintEngine>,
@@ -33,6 +69,7 @@ pub struct GlassTraceApp {
     allow_exit: bool,
     hidden_to_tray: bool,
     main_view: MainView,
+    theme: AppTheme,
     stats_ui: StatsUiState,
     start_time: Instant,
     selected_app: Option<String>,
@@ -55,7 +92,8 @@ impl GlassTraceApp {
         state: Arc<RwLock<TelemetryState>>,
         osint: Arc<OsintEngine>,
     ) -> Self {
-        apply_glass_theme(&cc.egui_ctx);
+        let initial_theme = AppTheme::CharcoalBlack;
+        apply_theme(&cc.egui_ctx, initial_theme);
         let tray = TrayHandle::start(cc.egui_ctx.clone());
         let (lat, lon, label) = state
             .read()
@@ -68,6 +106,7 @@ impl GlassTraceApp {
             allow_exit: false,
             hidden_to_tray: false,
             main_view: MainView::LiveMonitor,
+            theme: initial_theme,
             stats_ui: StatsUiState::default(),
             start_time: Instant::now(),
             selected_app: None,
@@ -145,12 +184,17 @@ impl eframe::App for GlassTraceApp {
         let mut clear_alerts = false;
         let mut new_origin_update: Option<(f32, f32, String)> = None;
 
+        let panel_bg = self.theme.panel_bg();
+        let central_bg = self.theme.central_bg();
+        let border_col = self.theme.border_col();
+        let mut toggle_theme = false;
+
         // Top Command & KPI Bar
         egui::TopBottomPanel::top("top_bar")
             .frame(
                 egui::Frame::none()
-                    .fill(Color32::from_rgb(11, 16, 26))
-                    .stroke(Stroke::new(1.0_f32, Color32::from_rgb(30, 41, 59)))
+                    .fill(panel_bg)
+                    .stroke(Stroke::new(1.0_f32, border_col))
                     .inner_margin(egui::Margin::symmetric(12.0, 8.0)),
             )
             .show(ctx, |ui| {
@@ -281,6 +325,13 @@ impl eframe::App for GlassTraceApp {
                             .clicked()
                         {
                             hide_to_tray = true;
+                        }
+                        if ui
+                            .button(format!("Theme: {}", self.theme.label()))
+                            .on_hover_text("Switch between Charcoal Black and Obsidian Navy themes")
+                            .clicked()
+                        {
+                            toggle_theme = true;
                         }
                         if ui.button("Export JSON").clicked() {
                             export_json = true;
@@ -474,8 +525,8 @@ impl eframe::App for GlassTraceApp {
                     .min_width(185.0)
                     .frame(
                         egui::Frame::none()
-                            .fill(Color32::from_rgb(11, 16, 26))
-                            .stroke(Stroke::new(1.0_f32, Color32::from_rgb(30, 41, 59)))
+                            .fill(panel_bg)
+                            .stroke(Stroke::new(1.0_f32, border_col))
                             .inner_margin(8.0),
                     )
                     .show(ctx, |ui| {
@@ -489,8 +540,8 @@ impl eframe::App for GlassTraceApp {
                     .min_width(240.0)
                     .frame(
                         egui::Frame::none()
-                            .fill(Color32::from_rgb(11, 16, 26))
-                            .stroke(Stroke::new(1.0_f32, Color32::from_rgb(30, 41, 59)))
+                            .fill(panel_bg)
+                            .stroke(Stroke::new(1.0_f32, border_col))
                             .inner_margin(8.0),
                     )
                     .show(ctx, |ui| {
@@ -505,16 +556,52 @@ impl eframe::App for GlassTraceApp {
                         );
                     });
 
-                // Center Workspace: World Map + Bandwidth Wave Graph + Incoming/Outgoing Flows Table
+                // Center Workspace: Map Mode Bar + World Map + Bandwidth Wave Graph + Flows Table
                 egui::CentralPanel::default()
                     .frame(
                         egui::Frame::none()
-                            .fill(Color32::from_rgb(8, 12, 21))
+                            .fill(central_bg)
                             .inner_margin(10.0),
                     )
                     .show(ctx, |ui| {
+                        // Compact Map View / Satellite View toolbar
+                        ui.horizontal(|ui| {
+                            ui.label(
+                                RichText::new("GEO TELEMETRY")
+                                    .strong()
+                                    .size(11.0)
+                                    .color(Color32::from_rgb(148, 163, 184)),
+                            );
+                            ui.separator();
+                            if ui
+                                .selectable_label(
+                                    self.map_view.style == MapStyle::VectorMap,
+                                    "Map View",
+                                )
+                                .clicked()
+                            {
+                                self.map_view.style = MapStyle::VectorMap;
+                            }
+                            if ui
+                                .selectable_label(
+                                    self.map_view.style == MapStyle::Satellite,
+                                    "Satellite View",
+                                )
+                                .clicked()
+                            {
+                                self.map_view.style = MapStyle::Satellite;
+                            }
+                            if self.map_view.zoom > 1.05 {
+                                ui.separator();
+                                if ui.small_button("Reset Zoom").clicked() {
+                                    self.map_view.reset();
+                                }
+                            }
+                        });
+                        ui.add_space(4.0);
+
                         let total_h = ui.available_height();
-                        let map_h = (total_h * 0.42).clamp(230.0, 390.0);
+                        let map_h = (total_h * 0.42).clamp(220.0, 380.0);
 
                         ui.allocate_ui(egui::Vec2::new(ui.available_width(), map_h), |ui| {
                             let prev_ip = self.selected_ip.clone();
@@ -526,6 +613,7 @@ impl eframe::App for GlassTraceApp {
                                 &snap.home_label,
                                 &mut self.selected_ip,
                                 &mut self.map_view,
+                                self.theme == AppTheme::CharcoalBlack,
                                 self.start_time.elapsed().as_secs_f64(),
                             ) {
                                 let lbl = format!("Custom ({:.2}, {:.2})", lat, lon);
@@ -556,7 +644,7 @@ impl eframe::App for GlassTraceApp {
                 egui::CentralPanel::default()
                     .frame(
                         egui::Frame::none()
-                            .fill(Color32::from_rgb(8, 12, 21))
+                            .fill(central_bg)
                             .inner_margin(12.0),
                     )
                     .show(ctx, |ui| {
@@ -569,6 +657,13 @@ impl eframe::App for GlassTraceApp {
         }
 
         // Apply state mutations outside the read lock
+        if toggle_theme {
+            self.theme = match self.theme {
+                AppTheme::CharcoalBlack => AppTheme::ObsidianNavy,
+                AppTheme::ObsidianNavy => AppTheme::CharcoalBlack,
+            };
+            apply_theme(ctx, self.theme);
+        }
         if hide_to_tray {
             ctx.send_viewport_cmd(egui::ViewportCommand::Visible(false));
             self.hidden_to_tray = true;
@@ -658,17 +753,33 @@ fn kpi_arrow_pill(ui: &mut egui::Ui, label: &str, pointing_up: bool, value: &str
         });
 }
 
-fn apply_glass_theme(ctx: &egui::Context) {
+fn apply_theme(ctx: &egui::Context, theme: AppTheme) {
     let mut visuals = egui::Visuals::dark();
-    visuals.window_fill = Color32::from_rgb(11, 16, 26);
-    visuals.panel_fill = Color32::from_rgb(11, 16, 26);
-    visuals.faint_bg_color = Color32::from_rgb(15, 23, 38);
-    visuals.extreme_bg_color = Color32::from_rgb(8, 12, 21);
-    visuals.widgets.noninteractive.bg_fill = Color32::from_rgb(15, 23, 38);
-    visuals.widgets.inactive.bg_fill = Color32::from_rgb(20, 30, 48);
-    visuals.widgets.hovered.bg_fill = Color32::from_rgb(30, 45, 72);
-    visuals.widgets.active.bg_fill = Color32::from_rgb(34, 211, 238);
-    visuals.selection.bg_fill = Color32::from_rgba_unmultiplied(34, 211, 238, 60);
-    visuals.selection.stroke = Stroke::new(1.0_f32, Color32::from_rgb(34, 211, 238));
+    match theme {
+        AppTheme::CharcoalBlack => {
+            visuals.window_fill = Color32::from_rgb(20, 20, 22);
+            visuals.panel_fill = Color32::from_rgb(20, 20, 22);
+            visuals.faint_bg_color = Color32::from_rgb(26, 26, 30);
+            visuals.extreme_bg_color = Color32::from_rgb(14, 14, 16);
+            visuals.widgets.noninteractive.bg_fill = Color32::from_rgb(26, 26, 30);
+            visuals.widgets.inactive.bg_fill = Color32::from_rgb(34, 34, 39);
+            visuals.widgets.hovered.bg_fill = Color32::from_rgb(48, 48, 56);
+            visuals.widgets.active.bg_fill = Color32::from_rgb(34, 211, 238);
+            visuals.selection.bg_fill = Color32::from_rgba_unmultiplied(34, 211, 238, 55);
+            visuals.selection.stroke = Stroke::new(1.0_f32, Color32::from_rgb(34, 211, 238));
+        }
+        AppTheme::ObsidianNavy => {
+            visuals.window_fill = Color32::from_rgb(11, 16, 26);
+            visuals.panel_fill = Color32::from_rgb(11, 16, 26);
+            visuals.faint_bg_color = Color32::from_rgb(15, 23, 38);
+            visuals.extreme_bg_color = Color32::from_rgb(8, 12, 21);
+            visuals.widgets.noninteractive.bg_fill = Color32::from_rgb(15, 23, 38);
+            visuals.widgets.inactive.bg_fill = Color32::from_rgb(20, 30, 48);
+            visuals.widgets.hovered.bg_fill = Color32::from_rgb(30, 45, 72);
+            visuals.widgets.active.bg_fill = Color32::from_rgb(34, 211, 238);
+            visuals.selection.bg_fill = Color32::from_rgba_unmultiplied(34, 211, 238, 60);
+            visuals.selection.stroke = Stroke::new(1.0_f32, Color32::from_rgb(34, 211, 238));
+        }
+    }
     ctx.set_visuals(visuals);
 }

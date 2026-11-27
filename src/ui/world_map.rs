@@ -1,13 +1,20 @@
 use crate::types::{format_rate, Direction, Flow};
 use eframe::egui::{self, epaint::Vertex, Color32, Mesh, Pos2, Rect, Stroke, Vec2};
 
-/// Persistent pan/zoom and origin-picking state for the world map.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum MapStyle {
+    VectorMap,
+    Satellite,
+}
+
+/// Persistent pan/zoom, style, and origin-picking state for the world map.
 #[derive(Debug, Clone)]
 pub struct MapViewState {
     pub zoom: f32,
     pub pan_x: f32,
     pub pan_y: f32,
     pub picking_origin: bool,
+    pub style: MapStyle,
 }
 
 impl Default for MapViewState {
@@ -17,6 +24,7 @@ impl Default for MapViewState {
             pan_x: 0.0,
             pan_y: 0.0,
             picking_origin: false,
+            style: MapStyle::VectorMap,
         }
     }
 }
@@ -229,14 +237,12 @@ fn unproject(rect: Rect, view: &MapViewState, pos: Pos2) -> (f32, f32) {
     (lat, lon)
 }
 
-/// Ear-clipping triangulation for arbitrary simple concave polygons.
-/// Returns a filled egui::Mesh with zero ocean-crossing artifacts.
-fn triangulate_polygon(pts: &[Pos2], color: Color32) -> Option<Mesh> {
-    if pts.len() < 3 {
+/// Ear-clipping triangulation for arbitrary simple concave polygons with per-vertex colors.
+fn triangulate_polygon_colored(pts: &[Pos2], colors: &[Color32]) -> Option<Mesh> {
+    if pts.len() < 3 || pts.len() != colors.len() {
         return None;
     }
 
-    // Compute signed area in screen coordinates (Y-down): positive = clockwise, negative = CCW
     let mut signed_area = 0.0f32;
     for i in 0..pts.len() {
         let a = pts[i];
@@ -249,7 +255,7 @@ fn triangulate_polygon(pts: &[Pos2], color: Color32) -> Option<Mesh> {
     let orientation = if signed_area > 0.0 { 1.0f32 } else { -1.0f32 };
 
     let mut mesh = Mesh::default();
-    for &p in pts {
+    for (&p, &color) in pts.iter().zip(colors.iter()) {
         mesh.vertices.push(Vertex {
             pos: p,
             uv: egui::epaint::WHITE_UV,
@@ -274,13 +280,11 @@ fn triangulate_polygon(pts: &[Pos2], color: Color32) -> Option<Mesh> {
             let b = pts[curr];
             let c = pts[next];
 
-            // Must be a convex vertex matching polygon winding
             let cross = (b.x - a.x) * (c.y - a.y) - (b.y - a.y) * (c.x - a.x);
             if cross * orientation <= 1e-5 {
                 continue;
             }
 
-            // Ensure no other polygon vertex lies inside triangle (a, b, c)
             let mut contains_other = false;
             for &other in &indices {
                 if other == prev || other == curr || other == next {
@@ -320,6 +324,46 @@ fn triangulate_polygon(pts: &[Pos2], color: Color32) -> Option<Mesh> {
     }
 }
 
+/// Realistic orbital satellite biome color for a given (lon, lat) coordinate.
+fn satellite_biome_color(lon: f32, lat: f32) -> Color32 {
+    // Polar ice / Arctic tundra
+    if lat > 64.0 {
+        return Color32::from_rgb(82, 102, 118);
+    }
+    // Sahara, Arabian, and Iranian deserts
+    if (14.0..=34.0).contains(&lat) && (-17.0..=64.0).contains(&lon) {
+        return Color32::from_rgb(78, 68, 50);
+    }
+    // Australian Outback
+    if (-32.0..=-16.0).contains(&lat) && (116.0..=145.0).contains(&lon) {
+        return Color32::from_rgb(84, 64, 48);
+    }
+    // Central Asian steppe / Gobi
+    if (35.0..=48.0).contains(&lat) && (55.0..=110.0).contains(&lon) {
+        return Color32::from_rgb(64, 66, 52);
+    }
+    // US Southwest / Northern Mexico arid belt
+    if (24.0..=38.0).contains(&lat) && (-118.0..=-100.0).contains(&lon) {
+        return Color32::from_rgb(72, 65, 50);
+    }
+    // Equatorial rainforests (Amazon, Congo, SE Asia)
+    if (-15.0..=14.0).contains(&lat) {
+        return Color32::from_rgb(24, 58, 42);
+    }
+    // Temperate forests & plains
+    Color32::from_rgb(31, 61, 46)
+}
+
+/// Major global metropolitan hubs rendered as subtle orbital night-lights in Satellite View.
+const SATELLITE_CITY_LIGHTS: &[(f32, f32)] = &[
+    (-74.0, 40.7), (-118.2, 34.0), (-122.4, 37.8), (-87.6, 41.9), (-79.4, 43.7),
+    (-99.1, 19.4), (-46.6, -23.5), (-58.4, -34.6), (-0.1, 51.5), (2.3, 48.9),
+    (8.7, 50.1), (13.4, 52.5), (4.9, 52.4), (-3.7, 40.4), (12.5, 41.9),
+    (37.6, 55.8), (28.9, 41.0), (31.2, 30.0), (3.4, 6.5), (28.0, -26.2),
+    (55.3, 25.2), (72.9, 19.1), (77.2, 28.6), (103.8, 1.3), (114.2, 22.3),
+    (121.5, 31.2), (116.4, 39.9), (127.0, 37.6), (139.7, 35.7), (151.2, -33.9),
+];
+
 fn point_in_triangle(p: Pos2, a: Pos2, b: Pos2, c: Pos2) -> bool {
     let d1 = sign(p, a, b);
     let d2 = sign(p, b, c);
@@ -344,6 +388,7 @@ pub fn draw_world_map(
     home_label: &str,
     selected_ip: &mut Option<String>,
     view: &mut MapViewState,
+    charcoal_theme: bool,
     time_sec: f64,
 ) -> Option<(f32, f32)> {
     let available = ui.available_size();
@@ -373,14 +418,50 @@ pub fn draw_world_map(
     }
 
     let painter = ui.painter_at(rect);
+    let is_sat = view.style == MapStyle::Satellite;
 
-    // Deep ocean backdrop
-    painter.rect_filled(rect, 6.0_f32, Color32::from_rgb(7, 13, 24));
-    painter.rect_stroke(rect, 6.0_f32, Stroke::new(1.0_f32, Color32::from_rgb(30, 41, 59)));
+    // Ocean backdrop (Bathymetric deep blue in Satellite View, Obsidian or Charcoal in Map View)
+    if is_sat {
+        let bands = 12;
+        let band_h = rect.height() / bands as f32;
+        for b in 0..bands {
+            let frac = b as f32 / (bands - 1) as f32;
+            // Slightly brighter near the equator, deeper abyssal blue near the poles
+            let eq = 1.0 - (frac - 0.5).abs() * 2.0;
+            let r = (5.0 + eq * 6.0) as u8;
+            let g = (14.0 + eq * 18.0) as u8;
+            let bl = (30.0 + eq * 28.0) as u8;
+            let band_rect = Rect::from_min_size(
+                Pos2::new(rect.left(), rect.top() + b as f32 * band_h),
+                Vec2::new(rect.width(), band_h + 1.0),
+            );
+            painter.rect_filled(band_rect, 0.0_f32, Color32::from_rgb(r, g, bl));
+        }
+        painter.rect_stroke(rect, 6.0_f32, Stroke::new(1.0_f32, Color32::from_rgb(38, 62, 92)));
+    } else {
+        let ocean = if charcoal_theme {
+            Color32::from_rgb(14, 14, 16)
+        } else {
+            Color32::from_rgb(7, 13, 24)
+        };
+        let border = if charcoal_theme {
+            Color32::from_rgb(42, 42, 48)
+        } else {
+            Color32::from_rgb(30, 41, 59)
+        };
+        painter.rect_filled(rect, 6.0_f32, ocean);
+        painter.rect_stroke(rect, 6.0_f32, Stroke::new(1.0_f32, border));
+    }
 
     // Lat/lon graticule grid
-    let grid_stroke = Stroke::new(0.6_f32, Color32::from_rgba_unmultiplied(51, 65, 85, 65));
-    let axis_stroke = Stroke::new(0.9_f32, Color32::from_rgba_unmultiplied(71, 85, 105, 110));
+    let grid_stroke = if is_sat {
+        Stroke::new(0.5_f32, Color32::from_rgba_unmultiplied(125, 211, 252, 30))
+    } else if charcoal_theme {
+        Stroke::new(0.6_f32, Color32::from_rgba_unmultiplied(82, 82, 91, 55))
+    } else {
+        Stroke::new(0.6_f32, Color32::from_rgba_unmultiplied(51, 65, 85, 65))
+    };
+    let axis_stroke = Stroke::new(0.9_f32, Color32::from_rgba_unmultiplied(100, 116, 139, 95));
     for lon in (-150..=150).step_by(30) {
         let p1 = project(rect, view, lon as f32, 84.0);
         let p2 = project(rect, view, lon as f32, -60.0);
@@ -393,21 +474,64 @@ pub fn draw_world_map(
     }
 
     // Draw accurately triangulated continents & islands
-    let land_fill = Color32::from_rgb(22, 34, 54);
-    let land_stroke = Stroke::new(1.0_f32, Color32::from_rgb(56, 82, 118));
+    let vec_land_fill = if charcoal_theme {
+        Color32::from_rgb(32, 32, 37)
+    } else {
+        Color32::from_rgb(22, 34, 54)
+    };
+    let vec_land_stroke = if charcoal_theme {
+        Stroke::new(1.0_f32, Color32::from_rgb(72, 72, 82))
+    } else {
+        Stroke::new(1.0_f32, Color32::from_rgb(56, 82, 118))
+    };
+
     for poly in LANDMASSES {
         let pts: Vec<Pos2> = poly
             .iter()
             .map(|&(lon, lat)| project(rect, view, lon, lat))
             .collect();
-        if let Some(mesh) = triangulate_polygon(&pts, land_fill) {
-            painter.add(egui::Shape::mesh(mesh));
-        }
-        let mut closed = pts;
+        let colors: Vec<Color32> = if is_sat {
+            poly.iter()
+                .map(|&(lon, lat)| satellite_biome_color(lon, lat))
+                .collect()
+        } else {
+            vec![vec_land_fill; pts.len()]
+        };
+
+        let mut closed = pts.clone();
         if let Some(&first) = closed.first() {
             closed.push(first);
         }
-        painter.add(egui::Shape::line(closed, land_stroke));
+
+        // In Satellite View, draw subtle turquoise continental shelf glow beneath landmass
+        if is_sat {
+            painter.add(egui::Shape::line(
+                closed.clone(),
+                Stroke::new(4.5_f32, Color32::from_rgba_unmultiplied(34, 150, 185, 42)),
+            ));
+        }
+
+        if let Some(mesh) = triangulate_polygon_colored(&pts, &colors) {
+            painter.add(egui::Shape::mesh(mesh));
+        }
+
+        let coast_stroke = if is_sat {
+            Stroke::new(1.0_f32, Color32::from_rgba_unmultiplied(120, 165, 145, 160))
+        } else {
+            vec_land_stroke
+        };
+        painter.add(egui::Shape::line(closed, coast_stroke));
+    }
+
+    // In Satellite View, add subtle warm city lights at major global metropolises
+    if is_sat {
+        for &(lon, lat) in SATELLITE_CITY_LIGHTS {
+            let p = project(rect, view, lon, lat);
+            if rect.contains(p) {
+                painter.circle_filled(p, 3.2, Color32::from_rgba_unmultiplied(251, 191, 36, 38));
+                painter.circle_filled(p, 1.3, Color32::from_rgba_unmultiplied(254, 240, 138, 130));
+            }
+        }
     }
 
     let home_pos = project(rect, view, home_lon, home_lat);
