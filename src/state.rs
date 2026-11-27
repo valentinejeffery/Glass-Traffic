@@ -1,3 +1,4 @@
+use crate::stats::StatsStore;
 use crate::types::{
     AlertEvent, AlertKind, AppSummary, BandwidthPoint, CaptureBackendStatus, Direction, Flow,
 };
@@ -48,6 +49,7 @@ pub struct TelemetryState {
     pub flows: Vec<Flow>,
     pub apps: Vec<AppSummary>,
     pub alerts: VecDeque<AlertEvent>,
+    pub stats: StatsStore,
     seen_hosts: HashSet<String>,
     seen_countries: HashSet<String>,
     seen_inbound_ips: HashSet<String>,
@@ -88,6 +90,7 @@ impl TelemetryState {
             flows: Vec::new(),
             apps: Vec::new(),
             alerts: VecDeque::with_capacity(MAX_ALERTS),
+            stats: StatsStore::load_or_default(),
             seen_hosts: HashSet::new(),
             seen_countries: HashSet::new(),
             seen_inbound_ips: HashSet::new(),
@@ -272,6 +275,9 @@ impl TelemetryState {
                 .then_with(|| (b.total_rx + b.total_tx).cmp(&(a.total_rx + a.total_tx)))
                 .then_with(|| b.flow_count.cmp(&a.flow_count))
         });
+
+        self.stats
+            .record_tick(&flows, total_rx_bps, total_tx_bps, alerts_in_tick);
 
         self.flows = flows;
         self.apps = apps;

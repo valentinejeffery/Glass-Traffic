@@ -3,6 +3,8 @@
 mod capture;
 mod osint;
 mod state;
+mod stats;
+mod tray;
 mod types;
 mod ui;
 

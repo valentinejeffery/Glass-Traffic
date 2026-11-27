@@ -1,24 +1,39 @@
 pub mod bandwidth_graph;
 pub mod panels;
+pub mod stats_view;
 pub mod world_map;
 
 use crate::osint::{detect_local_geoip, OsintEngine};
 use crate::state::TelemetryState;
+use crate::stats::{ExportCategory, ExportFormat};
+use crate::tray::TrayHandle;
 use crate::types::{format_bytes, format_rate};
 use crate::ui::bandwidth_graph::draw_bandwidth_graph;
 use crate::ui::panels::{
     draw_apps_panel, draw_dir_arrow, draw_flows_table, draw_right_panel, DirectionFilter,
     ProtoFilter, RightTab,
 };
+use crate::ui::stats_view::{draw_stats_view, StatsUiState};
 use crate::ui::world_map::{draw_world_map, MapViewState, ORIGIN_PRESETS};
 use eframe::egui::{self, Color32, RichText, Stroke};
 use std::sync::{Arc, RwLock};
 use std::thread;
 use std::time::{Duration, Instant};
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum MainView {
+    LiveMonitor,
+    Statistics,
+}
+
 pub struct GlassTraceApp {
     state: Arc<RwLock<TelemetryState>>,
     osint: Arc<OsintEngine>,
+    tray: TrayHandle,
+    allow_exit: bool,
+    hidden_to_tray: bool,
+    main_view: MainView,
+    stats_ui: StatsUiState,
     start_time: Instant,
     selected_app: Option<String>,
     selected_ip: Option<String>,
@@ -41,6 +56,7 @@ impl GlassTraceApp {
         osint: Arc<OsintEngine>,
     ) -> Self {
         apply_glass_theme(&cc.egui_ctx);
+        let tray = TrayHandle::start(cc.egui_ctx.clone());
         let (lat, lon, label) = state
             .read()
             .map(|g| (g.home_lat, g.home_lon, g.home_label.clone()))
@@ -48,6 +64,11 @@ impl GlassTraceApp {
         Self {
             state,
             osint,
+            tray,
+            allow_exit: false,
+            hidden_to_tray: false,
+            main_view: MainView::LiveMonitor,
+            stats_ui: StatsUiState::default(),
             start_time: Instant::now(),
             selected_app: None,
             selected_ip: None,
@@ -71,7 +92,44 @@ impl GlassTraceApp {
 
 impl eframe::App for GlassTraceApp {
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
-        // Keep animated map arcs & live telemetry smooth (~30 FPS)
+        // Handle native system tray commands (even while window is hidden)
+        if self.tray.take_show() {
+            self.hidden_to_tray = false;
+            ctx.send_viewport_cmd(egui::ViewportCommand::Visible(true));
+            ctx.send_viewport_cmd(egui::ViewportCommand::Minimized(false));
+            ctx.send_viewport_cmd(egui::ViewportCommand::Focus);
+        }
+        if self.tray.take_toggle_pause() {
+            if let Ok(mut guard) = self.state.write() {
+                guard.paused = !guard.paused;
+            }
+        }
+        if self.tray.take_quit() {
+            if let Ok(mut guard) = self.state.write() {
+                guard.stats.save_to_disk();
+            }
+            self.allow_exit = true;
+            ctx.send_viewport_cmd(egui::ViewportCommand::Close);
+            return;
+        }
+
+        // Intercept native window close (X) -> minimize to system tray so background recording continues
+        if ctx.input(|i| i.viewport().close_requested()) {
+            if self.tray.supported && !self.allow_exit {
+                ctx.send_viewport_cmd(egui::ViewportCommand::CancelClose);
+                ctx.send_viewport_cmd(egui::ViewportCommand::Visible(false));
+                self.hidden_to_tray = true;
+                return;
+            } else if let Ok(mut guard) = self.state.write() {
+                guard.stats.save_to_disk();
+            }
+        }
+
+        // Low-overhead wakeups while hidden to tray, smooth ~30 FPS while visible
+        if self.hidden_to_tray {
+            ctx.request_repaint_after(Duration::from_millis(500));
+            return;
+        }
         ctx.request_repaint_after(Duration::from_millis(33));
 
         let (snap, is_paused) = {
@@ -80,8 +138,10 @@ impl eframe::App for GlassTraceApp {
         };
 
         let mut toggle_pause = false;
+        let mut hide_to_tray = false;
         let mut export_csv = false;
         let mut export_json = false;
+        let mut stats_export_req: Option<(ExportCategory, ExportFormat)> = None;
         let mut clear_alerts = false;
         let mut new_origin_update: Option<(f32, f32, String)> = None;
 
@@ -108,6 +168,25 @@ impl eframe::App for GlassTraceApp {
                             .size(10.0)
                             .color(Color32::from_rgb(168, 85, 247)),
                     );
+                    ui.separator();
+
+                    // Main view switcher
+                    if ui
+                        .selectable_label(self.main_view == MainView::LiveMonitor, "Live Monitor")
+                        .clicked()
+                    {
+                        self.main_view = MainView::LiveMonitor;
+                    }
+                    if ui
+                        .selectable_label(
+                            self.main_view == MainView::Statistics,
+                            "Statistics & Reports",
+                        )
+                        .clicked()
+                    {
+                        self.main_view = MainView::Statistics;
+                    }
+
                     ui.separator();
 
                     // Live status indicator + Pause/Resume
@@ -194,6 +273,15 @@ impl eframe::App for GlassTraceApp {
                     );
 
                     ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                        if ui
+                            .button("Minimize to Tray")
+                            .on_hover_text(
+                                "Hide window to Windows System Tray and keep recording in background",
+                            )
+                            .clicked()
+                        {
+                            hide_to_tray = true;
+                        }
                         if ui.button("Export JSON").clicked() {
                             export_json = true;
                         }
@@ -377,92 +465,114 @@ impl eframe::App for GlassTraceApp {
             }
         }
 
-        // Left Sidebar: Per-Application Breakdown
-        egui::SidePanel::left("apps_panel")
-            .resizable(true)
-            .default_width(240.0)
-            .min_width(185.0)
-            .frame(
-                egui::Frame::none()
-                    .fill(Color32::from_rgb(11, 16, 26))
-                    .stroke(Stroke::new(1.0_f32, Color32::from_rgb(30, 41, 59)))
-                    .inner_margin(8.0),
-            )
-            .show(ctx, |ui| {
-                draw_apps_panel(ui, &snap.apps, &mut self.selected_app);
-            });
+        match self.main_view {
+            MainView::LiveMonitor => {
+                // Left Sidebar: Per-Application Breakdown
+                egui::SidePanel::left("apps_panel")
+                    .resizable(true)
+                    .default_width(240.0)
+                    .min_width(185.0)
+                    .frame(
+                        egui::Frame::none()
+                            .fill(Color32::from_rgb(11, 16, 26))
+                            .stroke(Stroke::new(1.0_f32, Color32::from_rgb(30, 41, 59)))
+                            .inner_margin(8.0),
+                    )
+                    .show(ctx, |ui| {
+                        draw_apps_panel(ui, &snap.apps, &mut self.selected_app);
+                    });
 
-        // Right Sidebar: Live OSINT Feed & Deep Endpoint Inspector
-        egui::SidePanel::right("osint_panel")
-            .resizable(true)
-            .default_width(310.0)
-            .min_width(240.0)
-            .frame(
-                egui::Frame::none()
-                    .fill(Color32::from_rgb(11, 16, 26))
-                    .stroke(Stroke::new(1.0_f32, Color32::from_rgb(30, 41, 59)))
-                    .inner_margin(8.0),
-            )
-            .show(ctx, |ui| {
-                draw_right_panel(
-                    ui,
-                    &mut self.right_tab,
-                    &snap.alerts,
-                    &snap.flows,
-                    &mut self.selected_ip,
-                    &self.osint,
-                    &mut clear_alerts,
-                );
-            });
+                // Right Sidebar: Live OSINT Feed & Deep Endpoint Inspector
+                egui::SidePanel::right("osint_panel")
+                    .resizable(true)
+                    .default_width(310.0)
+                    .min_width(240.0)
+                    .frame(
+                        egui::Frame::none()
+                            .fill(Color32::from_rgb(11, 16, 26))
+                            .stroke(Stroke::new(1.0_f32, Color32::from_rgb(30, 41, 59)))
+                            .inner_margin(8.0),
+                    )
+                    .show(ctx, |ui| {
+                        draw_right_panel(
+                            ui,
+                            &mut self.right_tab,
+                            &snap.alerts,
+                            &snap.flows,
+                            &mut self.selected_ip,
+                            &self.osint,
+                            &mut clear_alerts,
+                        );
+                    });
 
-        // Center Workspace: World Map + Bandwidth Wave Graph + Incoming/Outgoing Flows Table
-        egui::CentralPanel::default()
-            .frame(
-                egui::Frame::none()
-                    .fill(Color32::from_rgb(8, 12, 21))
-                    .inner_margin(10.0),
-            )
-            .show(ctx, |ui| {
-                let total_h = ui.available_height();
-                let map_h = (total_h * 0.42).clamp(230.0, 390.0);
+                // Center Workspace: World Map + Bandwidth Wave Graph + Incoming/Outgoing Flows Table
+                egui::CentralPanel::default()
+                    .frame(
+                        egui::Frame::none()
+                            .fill(Color32::from_rgb(8, 12, 21))
+                            .inner_margin(10.0),
+                    )
+                    .show(ctx, |ui| {
+                        let total_h = ui.available_height();
+                        let map_h = (total_h * 0.42).clamp(230.0, 390.0);
 
-                ui.allocate_ui(egui::Vec2::new(ui.available_width(), map_h), |ui| {
-                    let prev_ip = self.selected_ip.clone();
-                    if let Some((lat, lon)) = draw_world_map(
-                        ui,
-                        &snap.flows,
-                        snap.home_lat,
-                        snap.home_lon,
-                        &snap.home_label,
-                        &mut self.selected_ip,
-                        &mut self.map_view,
-                        self.start_time.elapsed().as_secs_f64(),
-                    ) {
-                        let lbl = format!("Custom ({:.2}, {:.2})", lat, lon);
-                        new_origin_update = Some((lat, lon, lbl));
-                    }
-                    if self.selected_ip != prev_ip && self.selected_ip.is_some() {
-                        self.right_tab = RightTab::Inspector;
-                    }
-                });
+                        ui.allocate_ui(egui::Vec2::new(ui.available_width(), map_h), |ui| {
+                            let prev_ip = self.selected_ip.clone();
+                            if let Some((lat, lon)) = draw_world_map(
+                                ui,
+                                &snap.flows,
+                                snap.home_lat,
+                                snap.home_lon,
+                                &snap.home_label,
+                                &mut self.selected_ip,
+                                &mut self.map_view,
+                                self.start_time.elapsed().as_secs_f64(),
+                            ) {
+                                let lbl = format!("Custom ({:.2}, {:.2})", lat, lon);
+                                new_origin_update = Some((lat, lon, lbl));
+                            }
+                            if self.selected_ip != prev_ip && self.selected_ip.is_some() {
+                                self.right_tab = RightTab::Inspector;
+                            }
+                        });
 
-                ui.add_space(8.0);
-                draw_bandwidth_graph(ui, &snap.history);
-                ui.add_space(8.0);
+                        ui.add_space(8.0);
+                        draw_bandwidth_graph(ui, &snap.history);
+                        ui.add_space(8.0);
 
-                draw_flows_table(
-                    ui,
-                    &snap.flows,
-                    &mut self.dir_filter,
-                    &mut self.proto_filter,
-                    &self.selected_app,
-                    &mut self.search,
-                    &mut self.selected_ip,
-                    &mut self.right_tab,
-                );
-            });
+                        draw_flows_table(
+                            ui,
+                            &snap.flows,
+                            &mut self.dir_filter,
+                            &mut self.proto_filter,
+                            &self.selected_app,
+                            &mut self.search,
+                            &mut self.selected_ip,
+                            &mut self.right_tab,
+                        );
+                    });
+            }
+            MainView::Statistics => {
+                egui::CentralPanel::default()
+                    .frame(
+                        egui::Frame::none()
+                            .fill(Color32::from_rgb(8, 12, 21))
+                            .inner_margin(12.0),
+                    )
+                    .show(ctx, |ui| {
+                        if let Ok(guard) = self.state.read() {
+                            stats_export_req =
+                                draw_stats_view(ui, &guard.stats, &snap.flows, &mut self.stats_ui);
+                        }
+                    });
+            }
+        }
 
         // Apply state mutations outside the read lock
+        if hide_to_tray {
+            ctx.send_viewport_cmd(egui::ViewportCommand::Visible(false));
+            self.hidden_to_tray = true;
+        }
         if let Some((lat, lon, label)) = new_origin_update {
             if let Ok(mut guard) = self.state.write() {
                 guard.set_home_origin(lat, lon, label.clone());
@@ -477,6 +587,18 @@ impl eframe::App for GlassTraceApp {
         if clear_alerts {
             if let Ok(mut guard) = self.state.write() {
                 guard.clear_alerts();
+            }
+        }
+        if let Some((cat, fmt)) = stats_export_req {
+            let res = self
+                .state
+                .read()
+                .ok()
+                .map(|g| g.stats.export_category(cat, fmt, &snap.flows));
+            match res {
+                Some(Ok(p)) => self.show_toast(format!("Exported {}", p.display())),
+                Some(Err(e)) => self.show_toast(format!("Export failed: {}", e)),
+                None => {}
             }
         }
         if export_csv {
