@@ -555,14 +555,26 @@ pub fn draw_world_map(
     for (idx, &(flow, dst)) in seen_coords.iter().enumerate() {
         let is_selected = selected_ip.as_deref() == Some(flow.remote_ip.as_str());
         let is_high_risk = flow.osint.risk_score >= 60;
-        let is_inbound = flow.direction == Direction::Inbound;
+
+        // Determine live data-flow direction based on actual incoming (RX) & outgoing (TX) bytes
+        let predominantly_in = flow.rx_bps > flow.tx_bps
+            || (flow.rx_bps == flow.tx_bps && flow.total_rx > flow.total_tx)
+            || (flow.rx_bps == 0 && flow.tx_bps == 0 && flow.direction == Direction::Inbound);
+
+        let has_in = flow.rx_bps > 0
+            || (flow.tx_bps == 0 && (flow.direction == Direction::Inbound || flow.total_rx > flow.total_tx));
+        let has_out = flow.tx_bps > 0 || !has_in;
+
+        let cyan = Color32::from_rgb(34, 211, 238);
+        let violet = Color32::from_rgb(168, 85, 247);
+        let crimson = Color32::from_rgb(239, 68, 68);
 
         let base_color = if is_high_risk {
-            Color32::from_rgb(239, 68, 68)
-        } else if is_inbound {
-            Color32::from_rgb(34, 211, 238)
+            crimson
+        } else if predominantly_in {
+            cyan
         } else {
-            Color32::from_rgb(168, 85, 247)
+            violet
         };
 
         let alpha = if is_selected { 245 } else { 175 };
@@ -591,15 +603,34 @@ pub fn draw_world_map(
         let width = if is_selected { 2.4_f32 } else { 1.5_f32 };
         painter.add(egui::Shape::line(pts, Stroke::new(width, arc_color)));
 
-        // Animated packet pulse traveling along arc (outward for OUT, inward for IN)
-        let speed = 0.35 + ((flow.rx_bps + flow.tx_bps) as f64 / 500_000.0).min(0.65);
-        let raw_t = ((time_sec * speed + (idx as f64) * 0.19) % 1.0) as f32;
-        let t = if is_inbound { 1.0 - raw_t } else { raw_t };
-        let inv = 1.0 - t;
-        let px = inv * inv * home_pos.x + 2.0 * inv * t * mid.x + t * t * dst.x;
-        let py = inv * inv * home_pos.y + 2.0 * inv * t * mid.y + t * t * dst.y;
-        painter.circle_filled(Pos2::new(px, py), 3.0, Color32::WHITE);
-        painter.circle_stroke(Pos2::new(px, py), 4.2, Stroke::new(1.2_f32, base_color));
+        // Helper to evaluate point at parameter t (0.0 = PC Origin, 1.0 = Remote Endpoint)
+        let bezier_pt = |t: f32| {
+            let inv = 1.0 - t;
+            Pos2::new(
+                inv * inv * home_pos.x + 2.0 * inv * t * mid.x + t * t * dst.x,
+                inv * inv * home_pos.y + 2.0 * inv * t * mid.y + t * t * dst.y,
+            )
+        };
+
+        // Incoming pulse: Cyan moving TOWARD your PC (1.0 -> 0.0)
+        if has_in {
+            let speed_in = 0.35 + (flow.rx_bps as f64 / 500_000.0).min(0.65);
+            let raw_t = ((time_sec * speed_in + (idx as f64) * 0.19) % 1.0) as f32;
+            let p_in = bezier_pt(1.0 - raw_t);
+            let ring_col = if is_high_risk { crimson } else { cyan };
+            painter.circle_filled(p_in, 2.8, Color32::WHITE);
+            painter.circle_stroke(p_in, 4.2, Stroke::new(1.4_f32, ring_col));
+        }
+
+        // Outgoing pulse: Violet moving AWAY from your PC (0.0 -> 1.0)
+        if has_out {
+            let speed_out = 0.35 + (flow.tx_bps as f64 / 500_000.0).min(0.65);
+            let raw_t = ((time_sec * speed_out + (idx as f64) * 0.37 + 0.5) % 1.0) as f32;
+            let p_out = bezier_pt(raw_t);
+            let ring_col = if is_high_risk { crimson } else { violet };
+            painter.circle_filled(p_out, 2.8, Color32::WHITE);
+            painter.circle_stroke(p_out, 4.2, Stroke::new(1.4_f32, ring_col));
+        }
 
         // Remote endpoint node
         let node_r = if is_selected {
