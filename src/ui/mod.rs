@@ -755,17 +755,41 @@ fn kpi_arrow_pill(ui: &mut egui::Ui, label: &str, pointing_up: bool, value: &str
 
 fn apply_theme(ctx: &egui::Context, theme: AppTheme) {
     let mut visuals = egui::Visuals::dark();
+    visuals.override_text_color = Some(Color32::from_rgb(226, 232, 240));
     match theme {
         AppTheme::CharcoalBlack => {
             visuals.window_fill = Color32::from_rgb(20, 20, 22);
             visuals.panel_fill = Color32::from_rgb(20, 20, 22);
             visuals.faint_bg_color = Color32::from_rgb(26, 26, 30);
             visuals.extreme_bg_color = Color32::from_rgb(14, 14, 16);
+
             visuals.widgets.noninteractive.bg_fill = Color32::from_rgb(26, 26, 30);
-            visuals.widgets.inactive.bg_fill = Color32::from_rgb(34, 34, 39);
+            visuals.widgets.noninteractive.weak_bg_fill = Color32::from_rgb(26, 26, 30);
+            visuals.widgets.noninteractive.bg_stroke =
+                Stroke::new(1.0_f32, Color32::from_rgb(44, 44, 50));
+            visuals.widgets.noninteractive.fg_stroke =
+                Stroke::new(1.0_f32, Color32::from_rgb(212, 212, 216));
+
+            visuals.widgets.inactive.bg_fill = Color32::from_rgb(34, 34, 40);
+            visuals.widgets.inactive.weak_bg_fill = Color32::from_rgb(34, 34, 40);
+            visuals.widgets.inactive.bg_stroke =
+                Stroke::new(1.0_f32, Color32::from_rgb(56, 56, 64));
+            visuals.widgets.inactive.fg_stroke =
+                Stroke::new(1.0_f32, Color32::from_rgb(228, 228, 231));
+
             visuals.widgets.hovered.bg_fill = Color32::from_rgb(48, 48, 56);
-            visuals.widgets.active.bg_fill = Color32::from_rgb(34, 211, 238);
-            visuals.selection.bg_fill = Color32::from_rgba_unmultiplied(34, 211, 238, 55);
+            visuals.widgets.hovered.weak_bg_fill = Color32::from_rgb(48, 48, 56);
+            visuals.widgets.hovered.bg_stroke =
+                Stroke::new(1.0_f32, Color32::from_rgb(34, 211, 238));
+            visuals.widgets.hovered.fg_stroke = Stroke::new(1.0_f32, Color32::WHITE);
+
+            visuals.widgets.active.bg_fill = Color32::from_rgb(22, 78, 99);
+            visuals.widgets.active.weak_bg_fill = Color32::from_rgb(22, 78, 99);
+            visuals.widgets.active.bg_stroke =
+                Stroke::new(1.0_f32, Color32::from_rgb(34, 211, 238));
+            visuals.widgets.active.fg_stroke = Stroke::new(1.0_f32, Color32::WHITE);
+
+            visuals.selection.bg_fill = Color32::from_rgba_unmultiplied(34, 211, 238, 42);
             visuals.selection.stroke = Stroke::new(1.0_f32, Color32::from_rgb(34, 211, 238));
         }
         AppTheme::ObsidianNavy => {
@@ -773,11 +797,34 @@ fn apply_theme(ctx: &egui::Context, theme: AppTheme) {
             visuals.panel_fill = Color32::from_rgb(11, 16, 26);
             visuals.faint_bg_color = Color32::from_rgb(15, 23, 38);
             visuals.extreme_bg_color = Color32::from_rgb(8, 12, 21);
+
             visuals.widgets.noninteractive.bg_fill = Color32::from_rgb(15, 23, 38);
+            visuals.widgets.noninteractive.weak_bg_fill = Color32::from_rgb(15, 23, 38);
+            visuals.widgets.noninteractive.bg_stroke =
+                Stroke::new(1.0_f32, Color32::from_rgb(30, 41, 59));
+            visuals.widgets.noninteractive.fg_stroke =
+                Stroke::new(1.0_f32, Color32::from_rgb(203, 213, 225));
+
             visuals.widgets.inactive.bg_fill = Color32::from_rgb(20, 30, 48);
+            visuals.widgets.inactive.weak_bg_fill = Color32::from_rgb(20, 30, 48);
+            visuals.widgets.inactive.bg_stroke =
+                Stroke::new(1.0_f32, Color32::from_rgb(45, 62, 88));
+            visuals.widgets.inactive.fg_stroke =
+                Stroke::new(1.0_f32, Color32::from_rgb(226, 232, 240));
+
             visuals.widgets.hovered.bg_fill = Color32::from_rgb(30, 45, 72);
-            visuals.widgets.active.bg_fill = Color32::from_rgb(34, 211, 238);
-            visuals.selection.bg_fill = Color32::from_rgba_unmultiplied(34, 211, 238, 60);
+            visuals.widgets.hovered.weak_bg_fill = Color32::from_rgb(30, 45, 72);
+            visuals.widgets.hovered.bg_stroke =
+                Stroke::new(1.0_f32, Color32::from_rgb(34, 211, 238));
+            visuals.widgets.hovered.fg_stroke = Stroke::new(1.0_f32, Color32::WHITE);
+
+            visuals.widgets.active.bg_fill = Color32::from_rgb(14, 66, 90);
+            visuals.widgets.active.weak_bg_fill = Color32::from_rgb(14, 66, 90);
+            visuals.widgets.active.bg_stroke =
+                Stroke::new(1.0_f32, Color32::from_rgb(34, 211, 238));
+            visuals.widgets.active.fg_stroke = Stroke::new(1.0_f32, Color32::WHITE);
+
+            visuals.selection.bg_fill = Color32::from_rgba_unmultiplied(34, 211, 238, 45);
             visuals.selection.stroke = Stroke::new(1.0_f32, Color32::from_rgb(34, 211, 238));
         }
     }

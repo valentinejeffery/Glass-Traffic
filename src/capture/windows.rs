@@ -440,11 +440,13 @@ fn read_interface_counters() -> InterfaceCounters {
             if row.Type == 24 || row.OperStatus != IfOperStatusUp {
                 continue;
             }
+            // Skip NDIS filter driver layers (bit 1 = FilterInterface)
+            if (row.InterfaceAndOperStatusFlags._bitfield & 0x02) != 0 {
+                continue;
+            }
             if row.InOctets == 0 && row.OutOctets == 0 {
                 continue;
             }
-            counters.total_rx_bytes = counters.total_rx_bytes.saturating_add(row.InOctets);
-            counters.total_tx_bytes = counters.total_tx_bytes.saturating_add(row.OutOctets);
 
             let alias_end = row
                 .Alias
@@ -452,6 +454,19 @@ fn read_interface_counters() -> InterfaceCounters {
                 .position(|&c| c == 0)
                 .unwrap_or(row.Alias.len());
             let alias = String::from_utf16_lossy(&row.Alias[..alias_end]);
+            let alias_lower = alias.to_lowercase();
+            if alias_lower.contains("filter")
+                || alias_lower.contains("scheduler")
+                || alias_lower.contains("wfp")
+                || alias_lower.contains("npcap")
+                || alias_lower.contains("miniport")
+            {
+                continue;
+            }
+
+            counters.total_rx_bytes = counters.total_rx_bytes.saturating_add(row.InOctets);
+            counters.total_tx_bytes = counters.total_tx_bytes.saturating_add(row.OutOctets);
+
             if !alias.is_empty() && !counters.active_interfaces.contains(&alias) {
                 counters.active_interfaces.push(alias);
             }

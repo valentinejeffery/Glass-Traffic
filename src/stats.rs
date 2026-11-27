@@ -454,28 +454,36 @@ impl StatsStore {
             (ExportCategory::Inbound, ExportFormat::Csv) => {
                 let subset: Vec<&Flow> = flows
                     .iter()
-                    .filter(|f| f.direction == Direction::Inbound)
+                    .filter(|f| {
+                        f.direction == Direction::Inbound || f.rx_bps > 0 || f.total_rx > 0
+                    })
                     .collect();
                 flows_to_csv(&subset)
             }
             (ExportCategory::Inbound, ExportFormat::Json) => {
                 let subset: Vec<&Flow> = flows
                     .iter()
-                    .filter(|f| f.direction == Direction::Inbound)
+                    .filter(|f| {
+                        f.direction == Direction::Inbound || f.rx_bps > 0 || f.total_rx > 0
+                    })
                     .collect();
                 serde_json::to_string_pretty(&subset).map_err(|e| e.to_string())?
             }
             (ExportCategory::Outbound, ExportFormat::Csv) => {
                 let subset: Vec<&Flow> = flows
                     .iter()
-                    .filter(|f| f.direction == Direction::Outbound)
+                    .filter(|f| {
+                        f.direction == Direction::Outbound || f.tx_bps > 0 || f.total_tx > 0
+                    })
                     .collect();
                 flows_to_csv(&subset)
             }
             (ExportCategory::Outbound, ExportFormat::Json) => {
                 let subset: Vec<&Flow> = flows
                     .iter()
-                    .filter(|f| f.direction == Direction::Outbound)
+                    .filter(|f| {
+                        f.direction == Direction::Outbound || f.tx_bps > 0 || f.total_tx > 0
+                    })
                     .collect();
                 serde_json::to_string_pretty(&subset).map_err(|e| e.to_string())?
             }

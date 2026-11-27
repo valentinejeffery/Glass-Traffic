@@ -282,7 +282,7 @@ pub fn draw_flows_table(
     ui.add_space(4.0);
 
     let q = search.trim().to_lowercase();
-    let filtered: Vec<&Flow> = flows
+    let mut filtered: Vec<&Flow> = flows
         .iter()
         .filter(|f| {
             if let Some(ref app) = selected_app {
@@ -292,8 +292,12 @@ pub fn draw_flows_table(
             }
             match dir_filter {
                 DirectionFilter::All => true,
-                DirectionFilter::Inbound => f.direction == Direction::Inbound,
-                DirectionFilter::Outbound => f.direction == Direction::Outbound,
+                DirectionFilter::Inbound => {
+                    f.direction == Direction::Inbound || f.rx_bps > 0 || f.total_rx > 0
+                }
+                DirectionFilter::Outbound => {
+                    f.direction == Direction::Outbound || f.tx_bps > 0 || f.total_tx > 0
+                }
                 DirectionFilter::Listening => f.direction == Direction::Listening,
                 DirectionFilter::HighRisk => f.osint.risk_score >= 60,
             }
@@ -317,6 +321,21 @@ pub fn draw_flows_table(
                 || f.local_port.to_string().contains(&q)
         })
         .collect();
+
+    // Sort by incoming volume when viewing Inbound, outgoing volume when viewing Outbound
+    match dir_filter {
+        DirectionFilter::Inbound => filtered.sort_by(|a, b| {
+            b.rx_bps
+                .cmp(&a.rx_bps)
+                .then_with(|| b.total_rx.cmp(&a.total_rx))
+        }),
+        DirectionFilter::Outbound => filtered.sort_by(|a, b| {
+            b.tx_bps
+                .cmp(&a.tx_bps)
+                .then_with(|| b.total_tx.cmp(&a.total_tx))
+        }),
+        _ => {}
+    }
 
     egui::ScrollArea::vertical()
         .id_salt("flows_table_scroll")

@@ -307,12 +307,12 @@ impl TelemetryState {
         let inbound_count = self
             .flows
             .iter()
-            .filter(|f| f.direction == Direction::Inbound)
+            .filter(|f| f.direction == Direction::Inbound || f.rx_bps > 0 || f.total_rx > 0)
             .count();
         let outbound_count = self
             .flows
             .iter()
-            .filter(|f| f.direction == Direction::Outbound)
+            .filter(|f| f.direction == Direction::Outbound || f.tx_bps > 0 || f.total_tx > 0)
             .count();
         let listening_count = self
             .flows
