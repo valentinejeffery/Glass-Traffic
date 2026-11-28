@@ -107,10 +107,10 @@ mod windows_tray {
         });
 
         let _ = thread::Builder::new()
-            .name("glasstrace-tray".into())
+            .name("packetatlas-tray".into())
             .spawn(move || unsafe {
                 let hinstance = GetModuleHandleW(null());
-                let class_name = to_wide("GlassTraceTrayHiddenWindow");
+                let class_name = to_wide("PacketAtlasTrayHiddenWindow");
 
                 let wc = WNDCLASSW {
                     style: 0,
@@ -165,7 +165,7 @@ mod windows_tray {
                 nid.uCallbackMessage = WM_TRAYICON;
                 nid.hIcon = hicon;
 
-                let tip = to_wide("GlassTrace Desktop — Recording Traffic");
+                let tip = to_wide("PacketAtlas — Recording Traffic");
                 let copy_len = tip.len().min(nid.szTip.len());
                 nid.szTip[..copy_len].copy_from_slice(&tip[..copy_len]);
 
@@ -198,9 +198,9 @@ mod windows_tray {
             } else if event == WM_RBUTTONUP {
                 let menu = CreatePopupMenu();
                 if !menu.is_null() {
-                    let s_show = to_wide("Show GlassTrace Desktop");
+                    let s_show = to_wide("Show PacketAtlas");
                     let s_pause = to_wide("Pause / Resume Recording");
-                    let s_quit = to_wide("Quit GlassTrace");
+                    let s_quit = to_wide("Quit PacketAtlas");
 
                     AppendMenuW(menu, MF_STRING, CMD_SHOW as usize, s_show.as_ptr());
                     AppendMenuW(menu, MF_STRING, CMD_PAUSE as usize, s_pause.as_ptr());

@@ -897,21 +897,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "glasstrace"
-version = "0.2.0"
-dependencies = [
- "chrono",
- "clap",
- "eframe",
- "libc",
- "serde",
- "serde_json",
- "ureq",
- "windows-sys 0.59.0",
- "winresource",
-]
-
-[[package]]
 name = "glow"
 version = "0.13.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1911,6 +1896,21 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "36820e9051aca1014ddc75770aab4d68bc1e9e632f0f5627c4086bc216fb583b"
 dependencies = [
  "ttf-parser",
+]
+
+[[package]]
+name = "packetatlas"
+version = "0.2.0"
+dependencies = [
+ "chrono",
+ "clap",
+ "eframe",
+ "libc",
+ "serde",
+ "serde_json",
+ "ureq",
+ "windows-sys 0.59.0",
+ "winresource",
 ]
 
 [[package]]

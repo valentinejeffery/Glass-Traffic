@@ -1,4 +1,7 @@
 /target
 glasstrace_session_*.json
 glasstrace_flows_*.csv
+packetatlas_*.json
+packetatlas_*.csv
 GlassTrace-Setup-*.exe
+PacketAtlas-Setup-*.exe

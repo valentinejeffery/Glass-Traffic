@@ -1,12 +1,12 @@
 [package]
-name = "glasstrace"
+name = "packetatlas"
 version = "0.2.0"
 edition = "2021"
-description = "Native desktop network traffic monitor & live OSINT geo-telemetry dashboard"
+description = "PacketAtlas — Native desktop network traffic monitor & live OSINT geo-telemetry"
 license = "MIT"
 
 [[bin]]
-name = "glasstrace"
+name = "packetatlas"
 path = "src/main.rs"
 
 [dependencies]

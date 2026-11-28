@@ -1,4 +1,4 @@
-name: Build GlassTrace Desktop
+name: Build PacketAtlas
 
 on:
   push:
@@ -26,14 +26,14 @@ jobs:
             choco install nsis -y
             $env:Path += ";C:\Program Files (x86)\NSIS"
           }
-          makensis "/DAPP_VERSION=0.2.0" "/DBINARY_PATH=..\target\release\glasstrace.exe" "/DOUT_FILE=..\GlassTrace-Setup-0.2.0.exe" installer\glasstrace.nsi
+          makensis "/DAPP_VERSION=0.2.0" "/DBINARY_PATH=..\target\release\packetatlas.exe" "/DOUT_FILE=..\PacketAtlas-Setup-0.2.0.exe" installer\packetatlas.nsi
       - name: Upload NSIS installer artifact
         uses: actions/upload-artifact@v4
         with:
-          name: GlassTrace-Setup-0.2.0-windows-x86_64
-          path: GlassTrace-Setup-0.2.0.exe
-      - name: Upload standalone glasstrace.exe artifact
+          name: PacketAtlas-Setup-0.2.0-windows-x86_64
+          path: PacketAtlas-Setup-0.2.0.exe
+      - name: Upload standalone packetatlas.exe artifact
         uses: actions/upload-artifact@v4
         with:
-          name: glasstrace-windows-x86_64
-          path: target/release/glasstrace.exe
+          name: packetatlas-windows-x86_64
+          path: target/release/packetatlas.exe

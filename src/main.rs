@@ -19,9 +19,9 @@ use std::time::Duration;
 
 #[derive(Parser, Debug)]
 #[command(
-    name = "glasstrace",
+    name = "packetatlas",
     version,
-    about = "GlassTrace Desktop — Native network traffic monitor & live OSINT geo-telemetry"
+    about = "PacketAtlas — Native network traffic monitor & live OSINT geo-telemetry"
 )]
 struct Args {
     /// Disable live ip-api.com / AbuseIPDB / VirusTotal HTTP lookups and use offline GeoIP fallback
@@ -59,7 +59,7 @@ fn main() -> eframe::Result<()> {
             guard.ingest_tick(flows, rx, tx, backend);
             let snap = guard.snapshot();
             println!(
-                "GlassTrace smoke-test OK | backend={} | flows={} (in={}, out={}, listen={}) | rx={} B/s | tx={} B/s | alerts={} | osint_cache={}",
+                "PacketAtlas smoke-test OK | backend={} | flows={} (in={}, out={}, listen={}) | rx={} B/s | tx={} B/s | alerts={} | osint_cache={}",
                 snap.backend.backend_name,
                 snap.flows.len(),
                 snap.inbound_count,
@@ -90,7 +90,7 @@ fn main() -> eframe::Result<()> {
     let state_bg = Arc::clone(&state);
     let osint_bg = Arc::clone(&osint);
     thread::Builder::new()
-        .name("glasstrace-collector".into())
+        .name("packetatlas-collector".into())
         .spawn(move || {
             let mut live_capture = HybridCapture::new();
             loop {
@@ -104,11 +104,13 @@ fn main() -> eframe::Result<()> {
         .expect("failed to spawn collector thread");
 
     let mut viewport = eframe::egui::ViewportBuilder::default()
-        .with_title("GlassTrace Desktop — Network Traffic & OSINT Geo-Telemetry")
+        .with_title("PacketAtlas — Network Traffic & OSINT Geo-Telemetry")
         .with_inner_size([1440.0, 880.0])
         .with_min_inner_size([1024.0, 660.0]);
 
-    if let Ok(icon) = eframe::icon_data::from_png_bytes(include_bytes!("../assets/glasstrace_icon.png")) {
+    if let Ok(icon) =
+        eframe::icon_data::from_png_bytes(include_bytes!("../assets/packetatlas_icon.png"))
+    {
         viewport = viewport.with_icon(Arc::new(icon));
     }
 
@@ -118,7 +120,7 @@ fn main() -> eframe::Result<()> {
     };
 
     eframe::run_native(
-        "GlassTrace Desktop",
+        "PacketAtlas",
         native_options,
         Box::new(move |cc| Ok(Box::new(GlassTraceApp::new(cc, state, osint)))),
     )

@@ -345,7 +345,7 @@ impl TelemetryState {
     pub fn export_json(&self) -> Result<PathBuf, String> {
         let snap = self.snapshot();
         let fname = format!(
-            "glasstrace_session_{}.json",
+            "packetatlas_session_{}.json",
             Local::now().format("%Y%m%d_%H%M%S")
         );
         let path = PathBuf::from(&fname);
@@ -356,7 +356,7 @@ impl TelemetryState {
 
     pub fn export_csv(&self) -> Result<PathBuf, String> {
         let fname = format!(
-            "glasstrace_flows_{}.csv",
+            "packetatlas_flows_{}.csv",
             Local::now().format("%Y%m%d_%H%M%S")
         );
         let path = PathBuf::from(&fname);

@@ -201,7 +201,7 @@ impl eframe::App for GlassTraceApp {
                 ui.horizontal_wrapped(|ui| {
                     // Brand
                     ui.label(
-                        RichText::new("GLASSTRACE")
+                        RichText::new("PACKETATLAS")
                             .strong()
                             .size(16.0)
                             .color(Color32::from_rgb(34, 211, 238)),

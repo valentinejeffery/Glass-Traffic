@@ -180,7 +180,7 @@ impl StatsStore {
         {
             if let Ok(appdata) = std::env::var("APPDATA") {
                 return PathBuf::from(appdata)
-                    .join("GlassTrace")
+                    .join("PacketAtlas")
                     .join("stats_history.json");
             }
         }
@@ -188,10 +188,10 @@ impl StatsStore {
             return PathBuf::from(home)
                 .join(".local")
                 .join("share")
-                .join("glasstrace")
+                .join("packetatlas")
                 .join("stats_history.json");
         }
-        PathBuf::from("glasstrace_stats_history.json")
+        PathBuf::from("packetatlas_stats_history.json")
     }
 
     pub fn load_or_default() -> Self {
@@ -443,7 +443,7 @@ impl StatsStore {
             ExportFormat::Json => "json",
         };
         let fname = format!(
-            "glasstrace_{}_{}.{}",
+            "packetatlas_{}_{}.{}",
             category.slug(),
             Local::now().format("%Y%m%d_%H%M%S"),
             ext

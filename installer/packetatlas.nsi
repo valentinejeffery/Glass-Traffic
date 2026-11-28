@@ -1,6 +1,6 @@
-; GlassTrace Desktop — NSIS Installer Script (Modern UI 2)
+; PacketAtlas — NSIS Installer Script (Modern UI 2)
 ; Build from repo root:
-;   makensis -DBINARY_PATH=target/release/glasstrace.exe installer/glasstrace.nsi
+;   makensis "/DBINARY_PATH=..\target\release\packetatlas.exe" installer\packetatlas.nsi
 
 Unicode True
 
@@ -13,31 +13,31 @@ Unicode True
 !endif
 
 !ifndef BINARY_PATH
-  !define BINARY_PATH "..\target\release\glasstrace.exe"
+  !define BINARY_PATH "..\target\release\packetatlas.exe"
 !endif
 
 !ifndef OUT_FILE
-  !define OUT_FILE "..\GlassTrace-Setup-${APP_VERSION}.exe"
+  !define OUT_FILE "..\PacketAtlas-Setup-${APP_VERSION}.exe"
 !endif
 
-!define APP_NAME "GlassTrace Desktop"
-!define APP_PUBLISHER "GlassTrace"
-!define APP_EXE "glasstrace.exe"
-!define UNINSTALL_REG_KEY "Software\Microsoft\Windows\CurrentVersion\Uninstall\GlassTrace"
+!define APP_NAME "PacketAtlas"
+!define APP_PUBLISHER "PacketAtlas"
+!define APP_EXE "packetatlas.exe"
+!define UNINSTALL_REG_KEY "Software\Microsoft\Windows\CurrentVersion\Uninstall\PacketAtlas"
 
 Name "${APP_NAME} ${APP_VERSION}"
 OutFile "${OUT_FILE}"
-InstallDir "$PROGRAMFILES64\GlassTrace"
+InstallDir "$PROGRAMFILES64\PacketAtlas"
 InstallDirRegKey HKLM "${UNINSTALL_REG_KEY}" "InstallLocation"
 RequestExecutionLevel admin
 SetCompressor /SOLID lzma
 
 ; Modern UI configuration
-!define MUI_ICON "..\assets\glasstrace.ico"
-!define MUI_UNICON "..\assets\glasstrace.ico"
+!define MUI_ICON "..\assets\packetatlas.ico"
+!define MUI_UNICON "..\assets\packetatlas.ico"
 !define MUI_ABORTWARNING
 !define MUI_WELCOMEPAGE_TITLE "Welcome to ${APP_NAME} Setup"
-!define MUI_WELCOMEPAGE_TEXT "This wizard will install ${APP_NAME} ${APP_VERSION}, a native network traffic monitor and live OSINT geo-telemetry dashboard.$\r$\n$\r$\nTip: Run GlassTrace as Administrator to enable exact per-flow raw packet capture (SIO_RCVALL). Standard users can still monitor all active sockets, processes, and bandwidth."
+!define MUI_WELCOMEPAGE_TEXT "This wizard will install ${APP_NAME} ${APP_VERSION}, a native desktop network traffic monitor and live OSINT geo-telemetry dashboard.$\r$\n$\r$\nTip: Run PacketAtlas as Administrator to enable exact per-flow raw packet capture (SIO_RCVALL). Standard users can still monitor all active sockets, processes, and bandwidth."
 !define MUI_FINISHPAGE_RUN "$INSTDIR\${APP_EXE}"
 !define MUI_FINISHPAGE_RUN_TEXT "Launch ${APP_NAME}"
 
@@ -55,14 +55,15 @@ SetCompressor /SOLID lzma
 
 !insertmacro MUI_LANGUAGE "English"
 
-Section "GlassTrace Desktop (Required)" SecCore
+Section "PacketAtlas (Required)" SecCore
   SectionIn RO
   SetRegView 64
   SetOutPath "$INSTDIR"
 
-  ; Stop any running GlassTrace instance (e.g. minimized in System Tray) so upgrade can overwrite the binary cleanly
+  ; Stop any running instance (including legacy GlassTrace) so upgrade can overwrite cleanly
   DetailPrint "Stopping any running ${APP_NAME} instance..."
   nsExec::ExecToLog 'taskkill /F /IM "${APP_EXE}" /T'
+  nsExec::ExecToLog 'taskkill /F /IM "glasstrace.exe" /T'
   Sleep 600
 
   File "/oname=${APP_EXE}" "${BINARY_PATH}"
@@ -99,14 +100,14 @@ SectionEnd
 
 ; Component descriptions
 !insertmacro MUI_FUNCTION_DESCRIPTION_BEGIN
-  !insertmacro MUI_DESCRIPTION_TEXT ${SecCore} "Core GlassTrace Desktop executable, Start Menu shortcuts, and uninstaller."
+  !insertmacro MUI_DESCRIPTION_TEXT ${SecCore} "Core PacketAtlas executable, Start Menu shortcuts, and uninstaller."
   !insertmacro MUI_DESCRIPTION_TEXT ${SecDesktop} "Create a shortcut on your Windows Desktop."
 !insertmacro MUI_FUNCTION_DESCRIPTION_END
 
 Section "Uninstall"
   SetRegView 64
 
-  ; Ensure GlassTrace is closed before removing files
+  ; Ensure PacketAtlas is closed before removing files
   nsExec::ExecToLog 'taskkill /F /IM "${APP_EXE}" /T'
   Sleep 600
 
