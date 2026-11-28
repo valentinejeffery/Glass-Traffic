@@ -39,3 +39,7 @@ Options:
   --vt-key <KEY>                VirusTotal v3 API key (or env VT_API_KEY)
   --smoke-test                  Run a single headless capture/OSINT check and exit
 ```
+
+## Credits
+
+- App icon: *Satellite Communication* (#1861096) by Vectors Market from [The Noun Project](https://thenounproject.com/icon/satellite-communication-1861096/).
