@@ -120,14 +120,14 @@ pub fn draw_apps_panel(
             for app in apps {
                 let is_selected = selected_app.as_deref() == Some(app.process_name.as_str());
                 let fill = if is_selected {
-                    Color32::from_rgb(26, 40, 66)
+                    ui.visuals().widgets.hovered.bg_fill
                 } else {
-                    Color32::from_rgb(15, 23, 38)
+                    ui.visuals().faint_bg_color
                 };
                 let border = if is_selected {
                     Color32::from_rgb(34, 211, 238)
                 } else {
-                    Color32::from_rgb(30, 41, 59)
+                    ui.visuals().widgets.noninteractive.bg_stroke.color
                 };
 
                 let frame_resp = egui::Frame::none()
@@ -198,7 +198,11 @@ pub fn draw_apps_panel(
                             egui::Sense::hover(),
                         );
                         let p = ui.painter();
-                        p.rect_filled(bar_rect, 2.0, Color32::from_rgb(30, 41, 59));
+                        p.rect_filled(
+                            bar_rect,
+                            2.0,
+                            ui.visuals().widgets.noninteractive.bg_stroke.color,
+                        );
                         let mut active_rect = bar_rect;
                         active_rect.set_width(bar_rect.width() * frac);
                         p.rect_filled(
@@ -531,8 +535,11 @@ pub fn draw_right_panel(
                         };
 
                         let resp = egui::Frame::none()
-                            .fill(Color32::from_rgb(15, 23, 38))
-                            .stroke(Stroke::new(1.0_f32, Color32::from_rgb(30, 41, 59)))
+                            .fill(ui.visuals().faint_bg_color)
+                            .stroke(Stroke::new(
+                                1.0_f32,
+                                ui.visuals().widgets.noninteractive.bg_stroke.color,
+                            ))
                             .rounding(5.0)
                             .inner_margin(egui::Margin::symmetric(8.0, 6.0))
                             .show(ui, |ui| {
@@ -610,7 +617,7 @@ pub fn draw_right_panel(
                     // Risk Score Banner
                     let rc = risk_color(info.risk_score);
                     egui::Frame::none()
-                        .fill(Color32::from_rgb(15, 23, 38))
+                        .fill(ui.visuals().faint_bg_color)
                         .stroke(Stroke::new(1.0_f32, rc))
                         .rounding(6.0)
                         .inner_margin(8.0)
@@ -699,8 +706,11 @@ pub fn draw_right_panel(
 
                     for f in matching_flows {
                         egui::Frame::none()
-                            .fill(Color32::from_rgb(15, 23, 38))
-                            .stroke(Stroke::new(1.0_f32, Color32::from_rgb(30, 41, 59)))
+                            .fill(ui.visuals().faint_bg_color)
+                            .stroke(Stroke::new(
+                                1.0_f32,
+                                ui.visuals().widgets.noninteractive.bg_stroke.color,
+                            ))
                             .rounding(5.0)
                             .inner_margin(6.0)
                             .show(ui, |ui| {

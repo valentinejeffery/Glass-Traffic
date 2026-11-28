@@ -268,8 +268,11 @@ impl eframe::App for GlassTraceApp {
 
                     // Session total pill with vector arrows
                     egui::Frame::none()
-                        .fill(Color32::from_rgb(15, 23, 38))
-                        .stroke(Stroke::new(1.0_f32, Color32::from_rgb(30, 41, 59)))
+                        .fill(ui.visuals().faint_bg_color)
+                        .stroke(Stroke::new(
+                            1.0_f32,
+                            ui.visuals().widgets.noninteractive.bg_stroke.color,
+                        ))
                         .rounding(5.0)
                         .inner_margin(egui::Margin::symmetric(8.0, 3.0))
                         .show(ui, |ui| {
@@ -717,8 +720,11 @@ impl eframe::App for GlassTraceApp {
 
 fn kpi_pill(ui: &mut egui::Ui, label: &str, value: &str, color: Color32) {
     egui::Frame::none()
-        .fill(Color32::from_rgb(15, 23, 38))
-        .stroke(Stroke::new(1.0_f32, Color32::from_rgb(30, 41, 59)))
+        .fill(ui.visuals().faint_bg_color)
+        .stroke(Stroke::new(
+            1.0_f32,
+            ui.visuals().widgets.noninteractive.bg_stroke.color,
+        ))
         .rounding(5.0)
         .inner_margin(egui::Margin::symmetric(8.0, 3.0))
         .show(ui, |ui| {
@@ -735,8 +741,11 @@ fn kpi_pill(ui: &mut egui::Ui, label: &str, value: &str, color: Color32) {
 
 fn kpi_arrow_pill(ui: &mut egui::Ui, label: &str, pointing_up: bool, value: &str, color: Color32) {
     egui::Frame::none()
-        .fill(Color32::from_rgb(15, 23, 38))
-        .stroke(Stroke::new(1.0_f32, Color32::from_rgb(30, 41, 59)))
+        .fill(ui.visuals().faint_bg_color)
+        .stroke(Stroke::new(
+            1.0_f32,
+            ui.visuals().widgets.noninteractive.bg_stroke.color,
+        ))
         .rounding(5.0)
         .inner_margin(egui::Margin::symmetric(8.0, 3.0))
         .show(ui, |ui| {

@@ -37,10 +37,13 @@ pub fn draw_stats_view(
 ) -> Option<(ExportCategory, ExportFormat)> {
     let mut export_req = None;
 
+    let card_bg = ui.visuals().faint_bg_color;
+    let card_border = ui.visuals().widgets.noninteractive.bg_stroke.color;
+
     // Header + Categorized Export Bar
     egui::Frame::none()
-        .fill(Color32::from_rgb(13, 20, 34))
-        .stroke(Stroke::new(1.0_f32, Color32::from_rgb(30, 41, 59)))
+        .fill(card_bg)
+        .stroke(Stroke::new(1.0_f32, card_border))
         .rounding(6.0_f32)
         .inner_margin(10.0)
         .show(ui, |ui| {
@@ -119,8 +122,8 @@ pub fn draw_stats_view(
 
     // Timeframe Selector + Grouped Bar Chart (Daily / Weekly / Monthly)
     egui::Frame::none()
-        .fill(Color32::from_rgb(12, 18, 30))
-        .stroke(Stroke::new(1.0_f32, Color32::from_rgb(30, 41, 59)))
+        .fill(card_bg)
+        .stroke(Stroke::new(1.0_f32, card_border))
         .rounding(6.0_f32)
         .inner_margin(10.0)
         .show(ui, |ui| {
@@ -176,8 +179,8 @@ pub fn draw_stats_view(
     ui.add_space(6.0);
 
     egui::Frame::none()
-        .fill(Color32::from_rgb(12, 18, 30))
-        .stroke(Stroke::new(1.0_f32, Color32::from_rgb(30, 41, 59)))
+        .fill(card_bg)
+        .stroke(Stroke::new(1.0_f32, card_border))
         .rounding(6.0_f32)
         .inner_margin(10.0)
         .show(ui, |ui| {
@@ -210,7 +213,7 @@ fn draw_bar_chart(ui: &mut egui::Ui, bars: &[ChartBar]) {
         ui.allocate_exact_size(Vec2::new(available.x, height), egui::Sense::hover());
     let painter = ui.painter_at(rect);
 
-    painter.rect_filled(rect, 4.0_f32, Color32::from_rgb(8, 12, 21));
+    painter.rect_filled(rect, 4.0_f32, ui.visuals().extreme_bg_color);
 
     if bars.is_empty() {
         return;
@@ -495,8 +498,11 @@ fn draw_bandwidth_tiers(ui: &mut egui::Ui, flows: &[Flow]) {
 
 fn summary_chip(ui: &mut egui::Ui, label: &str, pointing_up: bool, value: &str, color: Color32) {
     egui::Frame::none()
-        .fill(Color32::from_rgb(15, 23, 38))
-        .stroke(Stroke::new(1.0_f32, Color32::from_rgb(30, 41, 59)))
+        .fill(ui.visuals().extreme_bg_color)
+        .stroke(Stroke::new(
+            1.0_f32,
+            ui.visuals().widgets.noninteractive.bg_stroke.color,
+        ))
         .rounding(5.0)
         .inner_margin(egui::Margin::symmetric(8.0, 3.0))
         .show(ui, |ui| {
@@ -511,8 +517,11 @@ fn summary_chip(ui: &mut egui::Ui, label: &str, pointing_up: bool, value: &str, 
 
 fn stat_plain_chip(ui: &mut egui::Ui, label: &str, value: &str, color: Color32) {
     egui::Frame::none()
-        .fill(Color32::from_rgb(15, 23, 38))
-        .stroke(Stroke::new(1.0_f32, Color32::from_rgb(30, 41, 59)))
+        .fill(ui.visuals().extreme_bg_color)
+        .stroke(Stroke::new(
+            1.0_f32,
+            ui.visuals().widgets.noninteractive.bg_stroke.color,
+        ))
         .rounding(5.0)
         .inner_margin(egui::Margin::symmetric(8.0, 3.0))
         .show(ui, |ui| {
