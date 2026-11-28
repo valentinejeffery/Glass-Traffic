@@ -60,6 +60,11 @@ Section "GlassTrace Desktop (Required)" SecCore
   SetRegView 64
   SetOutPath "$INSTDIR"
 
+  ; Stop any running GlassTrace instance (e.g. minimized in System Tray) so upgrade can overwrite the binary cleanly
+  DetailPrint "Stopping any running ${APP_NAME} instance..."
+  nsExec::ExecToLog 'taskkill /F /IM "${APP_EXE}" /T'
+  Sleep 600
+
   File "/oname=${APP_EXE}" "${BINARY_PATH}"
   File "..\README.md"
   File "..\LICENSE"
@@ -100,6 +105,10 @@ SectionEnd
 
 Section "Uninstall"
   SetRegView 64
+
+  ; Ensure GlassTrace is closed before removing files
+  nsExec::ExecToLog 'taskkill /F /IM "${APP_EXE}" /T'
+  Sleep 600
 
   Delete "$INSTDIR\${APP_EXE}"
   Delete "$INSTDIR\README.md"
